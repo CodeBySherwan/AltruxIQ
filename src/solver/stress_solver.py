@@ -1,4 +1,5 @@
-﻿import numpy as np
+﻿# pyrefly: ignore [missing-import]
+import numpy as np
 from scipy.integrate import cumulative_trapezoid
 
 def calculate_beam_deflection(x_field, bending_moment, elastic_modulus, moment_of_inertia):

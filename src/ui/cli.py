@@ -10,8 +10,10 @@ load definitions, analysis, postprocessing, and project save/load functionalitie
 import json
 import os
 import sys
+# pyrefly: ignore [missing-import]
 import numpy as np
 import time
+# pyrefly: ignore [missing-import]
 from termcolor import colored, cprint
 # --- PATH INJECTION (The Fix) ---
 # 1. Get the directory of cli.py (ui folder)
@@ -28,7 +30,9 @@ from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
                       Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined)
 from plotting.beam_plot import plot_reaction_diagram, plot_beam_schematic,plot_cantilever_beam_schematic
-from solver.stress_solver import (calculate_beam_deflection, first_moment_of_area_rect, calculate_shear_stress,
+from solver.stress_solver import (calculate_beam_deflection,
+                         first_moment_of_area_rect, first_moment_of_area_general,
+                         width_array_for_section, calculate_shear_stress,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
@@ -59,6 +63,14 @@ shape = ""
 c = 0.0
 b = 0.0
 y_array = np.array([])
+support_types = ("pin", "roller")  # BUG-10 FIX: module-level default; overwritten on load/save
+beam_type = None  # BUG-05 FIX: initialise at module level to prevent NameError
+# BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
+Deflection = None
+Slope = None
+Shear_stress = None
+bending_stress = None
+FOS = None
 project_state = {
     "is_loaded": False,
     "profile_saved": False, 
@@ -74,8 +86,10 @@ project_state = {
 # =============================
 def New_Project():
     """Start a new project by resetting the current project."""
-    global current_project, project_state
+    global current_project, project_state, beam_type, support_types
     current_project = None  # Reset current project data
+    beam_type = None        # BUG-05 FIX: reset beam_type so menu guards work correctly
+    support_types = ("pin", "roller")  # BUG-10 FIX: reset to safe default
     
     # Reset project state flags
     project_state = {
@@ -115,7 +129,7 @@ def load_project():
     global Ix, shape, c, b, y_array, project_state
     global elastic_modulus, selected_material, density, yield_strength, ultimate_strength, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads
-    global beam_type  # To access beam_type variable
+    global beam_type, support_types  # BUG-10 FIX: support_types must be a global
 
     load_projects_from_disk()
 
@@ -177,6 +191,14 @@ def load_project():
         B_restraint = current_project.get('support_B_restraint', [])
         A_type = current_project.get('support_A_type', '')
         B_type = current_project.get('support_B_type', '')
+        # BUG-10 FIX: restore support_types from saved data; derive from beam_type as fallback
+        saved_st = current_project.get('support_types', None)
+        if saved_st is not None:
+            support_types = tuple(saved_st)
+        elif beam_type == "Cantilever":
+            support_types = ("fixed",)
+        else:
+            support_types = ("pin", "roller")
 
         # Load analysis data
         X_Field = np.array(current_project.get('X_Field', []))
@@ -370,7 +392,7 @@ def save_project():
     """
     Save or update a project in memory, and persist later to disk.
     """
-    global beam_storage, current_project, project_state, beam_type
+    global beam_storage, current_project, project_state, beam_type, support_types
     
     project_name = input(colored("Enter a name for this project ➔ ", 'cyan')).strip()
     
@@ -395,7 +417,7 @@ def save_project():
     # Create project data dictionary
     project_data = {
         'name': project_name,
-        'beam_type': beam_type,  # Save beam_type with the project
+        'beam_type': beam_type,
         'beam_length': beam_length,
         'support_A_pos': A,
         'support_B_pos': B,
@@ -403,6 +425,7 @@ def save_project():
         'support_B_restraint': list(B_restraint),
         'support_A_type': A_type,
         'support_B_type': B_type,
+        'support_types': list(support_types),  # BUG-10 FIX: persist support_types to JSON
         'X_Field': safe_serialize(X_Field),
         'Total_ShearForce': safe_serialize(Total_ShearForce),
         'Total_BendingMoment': safe_serialize(Total_BendingMoment),
@@ -696,10 +719,6 @@ def run_extended_menu():
     global support_types
     global beam_type  # Ensure we can access the beam_type variable
 
-    # Initialize beam_type if not already set
-    if 'beam_type' not in globals():
-        beam_type = None
-
     load_material_database()
     load_projects_from_disk()
 
@@ -813,7 +832,7 @@ def run_extended_menu():
                     elif profile_choice == '3':
                         Ix, shape, c, b, y_array = moi_solver.inertia_moment_circle()
                     elif profile_choice == '4':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_circle()
+                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_hollow_circle()
                     elif profile_choice == '5':
                         Ix, shape, c, b, y_array = moi_solver.inertia_moment_square()
                     elif profile_choice == '6':
@@ -1002,7 +1021,6 @@ def run_extended_menu():
                         try:
                             formatted_loads = format_loads_for_plotting(loads_dict)
                             if beam_type=="Simple":
-                                support_types = ("pin", "roller")
                                 formatted_loads = format_loads_for_plotting(loads_dict)
                                 plot_beam_schematic(beam_length, A, B, support_types, formatted_loads)
                             elif beam_type=="Cantilever":
@@ -1026,9 +1044,8 @@ def run_extended_menu():
                     continue
 
                 try:
-                    formatted_loads = format_loads_for_plotting(loads_dict)
+                    formatted_loads = format_loads_for_plotting(loads)
                     if beam_type=="Simple":
-                        support_types = ("pin", "roller")
                         plot_beam_schematic(beam_length, A, B, support_types, formatted_loads)
                     elif beam_type=="Cantilever":
                          fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis")
@@ -1255,9 +1272,10 @@ def run_extended_menu():
                         print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
         
                         # Perform actual calculations
-                        # Calculate shear stress
-                        Q_array = first_moment_of_area_rect(b, y_array)
-                        Shear_stress = calculate_shear_stress(Total_ShearForce, Q_array, Ix, b)
+                        # BUG-09 FIX: build section-aware b(y) for correct τ = VQ/(Ib(y))
+                        b_array = width_array_for_section(shape, c, b, y_array)
+                        Q_array = first_moment_of_area_general(b_array, y_array)
+                        Shear_stress = calculate_shear_stress(Total_ShearForce, Q_array, Ix, b_array)
                         Max_Shear_stress = np.max(np.abs(Shear_stress))
 
                         # Calculate bending stress
@@ -1308,7 +1326,6 @@ def run_extended_menu():
                 if sub_choice == '1':  # Reaction forces schematic
                     try:
                         print_success("Processing Reactions Forces Schematic Plots (Plotly-only):")
-                        support_types = ("pin", "roller")
                         plot_reaction_diagram(A, B, Reactions, support_types)
                     except Exception as e:
                         print_error(f"Error plotting reaction diagram: {e}")
@@ -1330,16 +1347,29 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
                         
-                elif sub_choice == '5':  # Combined (Plotly)
+                elif sub_choice == '5':  # Combined plots
                     try:
+                        # BUG-07 FIX: only pass arrays that have actually been computed
+                        defl_data = Deflection if project_state.get("deflection_calculated", False) else None
+                        shear_data = Shear_stress if project_state.get("stress_calculated", False) else None
+
+                        if defl_data is None:
+                            print(colored("  ℹ  Deflection not yet calculated — will be omitted from combined plot.", 'yellow'))
+                        if shear_data is None:
+                            print(colored("  ℹ  Shear stress not yet calculated — will be omitted from combined plot.", 'yellow'))
+
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Combined Plots (Matplotlib):")
-                            Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=Deflection, ShearStress=Shear_stress)
+                            Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=defl_data, ShearStress=shear_data)
                         elif style == '2':
-                                print_success("Processing Combined Plots (Plotly):")
-                                Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=Deflection, ShearStress=Shear_stress)
-                        
+                            print_success("Processing Combined Plots (Plotly):")
+                            Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data)
+                        else:
+                            print_error("Invalid style selection!")
+                            time.sleep(2)
+                            continue
+
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")
                         time.sleep(2)
@@ -1350,7 +1380,7 @@ def run_extended_menu():
                         print_error("Please calculate deflection first (in Analysis menu)!")
                         time.sleep(2)
                         continue
-                        
+
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
@@ -1369,27 +1399,29 @@ def run_extended_menu():
                         continue
 
                 elif sub_choice == '4':  # Stress contours
-                    #if not project_state.get("stress_calculated", False):
-                        try:
-                            style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
-                            if style == '1':
-                                print_success("Processing shear/Bending Stress Plots (Matplotlib):")
-                                Matplot_ShearStress(X_Field,Shear_stress)
-                                Matplot_BendingStress(X_Field, bending_stress)
-                            elif style == '2':
-                                print_success("Processing sshear/Bending Plots (Plotly):")
-                                Plotly_ShearStress(X_Field,Shear_stress,beam_length)
-                                Plotly_BendingStress(X_Field, bending_stress, beam_length)
-                            else:
-                                print_error("Invalid style selection!")
-                                time.sleep(2)
-                                continue
-                        except Exception as e:
-                            print_error(f"Error plotting shear-Stress Plot: {e}")
+                    # BUG-07 FIX: guard against accessing Shear_stress/bending_stress before computed
+                    if not project_state.get("stress_calculated", False):
+                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
+                        time.sleep(2)
+                        continue
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing shear/Bending Stress Plots (Matplotlib):")
+                            Matplot_ShearStress(X_Field, Shear_stress)
+                            Matplot_BendingStress(X_Field, bending_stress)
+                        elif style == '2':
+                            print_success("Processing shear/Bending Plots (Plotly):")
+                            Plotly_ShearStress(X_Field, Shear_stress, beam_length)
+                            Plotly_BendingStress(X_Field, bending_stress, beam_length)
+                        else:
+                            print_error("Invalid style selection!")
                             time.sleep(2)
+                            continue
+                    except Exception as e:
+                        print_error(f"Error plotting shear-Stress Plot: {e}")
+                        time.sleep(2)
 
-
-                                
         elif selection == '10':  # Save Project
             if not project_state["profile_saved"] or not project_state["material_saved"] or \
                not project_state["supports_saved"] or not project_state["loads_saved"]:

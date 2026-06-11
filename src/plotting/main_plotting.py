@@ -1468,14 +1468,13 @@ def Matplot_ShearStress(X_Field, Shear_stress):
     None, displays the plot
     """
 
-    if len(ShearStress.shape) > 1:
-         ShearStress = np.max(np.abs(ShearStress), axis=1)
-
+    if len(Shear_stress.shape) > 1:
+        y_stress = np.max(np.abs(Shear_stress), axis=1)
     else:
-        ShearStress = ShearStress
-    # --- Shear Stress Diagram Data ---
+        y_stress = Shear_stress
+        
     x_stress = X_Field
-    y_stress = Shear_stress
+
 
     # Find max/min values and their positions for annotations
     max_stress = round(np.max(y_stress), 3)
