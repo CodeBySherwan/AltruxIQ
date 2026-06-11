@@ -1,0 +1,252 @@
+[
+  {
+    "Material": "Structural Steel (S235)",
+    "Density": 7850,
+    "Yield Strength": 235,
+    "Ultimate Strength": 360,
+    "Elastic Modulus": 210,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 12e-6,
+    "Description": "Common structural steel grade used in general construction"
+  },
+  {
+    "Material": "Structural Steel (S275)",
+    "Density": 7850,
+    "Yield Strength": 275,
+    "Ultimate Strength": 430,
+    "Elastic Modulus": 210,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 12e-6,
+    "Description": "Medium-strength structural steel for general applications"
+  },
+  {
+    "Material": "Structural Steel (S355)",
+    "Density": 7850,
+    "Yield Strength": 355,
+    "Ultimate Strength": 510,
+    "Elastic Modulus": 210,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 12e-6,
+    "Description": "High-strength structural steel for heavy-duty applications"
+  },
+  {
+    "Material": "Reinforced Concrete",
+    "Density": 2500,
+    "Yield Strength": 40,
+    "Ultimate Strength": 60,
+    "Elastic Modulus": 30,
+    "Poisson Ratio": 0.2,
+    "Thermal Expansion": 10e-6,
+    "Description": "Composite material with steel reinforcement for structural applications"
+  },
+  {
+    "Material": "Aluminum Alloy (6061-T6)",
+    "Density": 2700,
+    "Yield Strength": 275,
+    "Ultimate Strength": 310,
+    "Elastic Modulus": 69,
+    "Poisson Ratio": 0.33,
+    "Thermal Expansion": 23.6e-6,
+    "Description": "Versatile aluminum alloy with good strength-to-weight ratio"
+  },
+  {
+    "Material": "Aluminum Alloy (7075-T6)",
+    "Density": 2810,
+    "Yield Strength": 505,
+    "Ultimate Strength": 570,
+    "Elastic Modulus": 71,
+    "Poisson Ratio": 0.33,
+    "Thermal Expansion": 23.4e-6,
+    "Description": "High-strength aluminum alloy for aerospace and high-performance applications"
+  },
+  {
+    "Material": "Timber (Douglas Fir)",
+    "Density": 530,
+    "Yield Strength": 40,
+    "Ultimate Strength": 55,
+    "Elastic Modulus": 12,
+    "Poisson Ratio": 0.38,
+    "Thermal Expansion": 4e-6,
+    "Description": "Common structural wood with good strength-to-weight ratio"
+  },
+  {
+    "Material": "Timber (Oak)",
+    "Density": 750,
+    "Yield Strength": 50,
+    "Ultimate Strength": 65,
+    "Elastic Modulus": 11,
+    "Poisson Ratio": 0.37,
+    "Thermal Expansion": 5e-6,
+    "Description": "Dense hardwood with high durability for structural applications"
+  },
+  {
+    "Material": "Cast Iron (Gray)",
+    "Density": 7200,
+    "Yield Strength": 130,
+    "Ultimate Strength": 200,
+    "Elastic Modulus": 110,
+    "Poisson Ratio": 0.25,
+    "Thermal Expansion": 10.5e-6,
+    "Description": "Traditional material with high compression strength but brittle behavior"
+  },
+  {
+    "Material": "Ductile Iron",
+    "Density": 7100,
+    "Yield Strength": 275,
+    "Ultimate Strength": 420,
+    "Elastic Modulus": 170,
+    "Poisson Ratio": 0.28,
+    "Thermal Expansion": 11e-6,
+    "Description": "Cast iron with improved ductility and shock resistance"
+  },
+  {
+    "Material": "High Strength Low Alloy Steel",
+    "Density": 7850,
+    "Yield Strength": 480,
+    "Ultimate Strength": 620,
+    "Elastic Modulus": 200,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 11.5e-6,
+    "Description": "Steel with additional alloying elements for improved strength"
+  },
+  {
+    "Material": "Stainless Steel (304)",
+    "Density": 8000,
+    "Yield Strength": 215,
+    "Ultimate Strength": 505,
+    "Elastic Modulus": 193,
+    "Poisson Ratio": 0.29,
+    "Thermal Expansion": 17.3e-6,
+    "Description": "Corrosion-resistant steel with good formability"
+  },
+  {
+    "Material": "Stainless Steel (316)",
+    "Density": 8000,
+    "Yield Strength": 240,
+    "Ultimate Strength": 530,
+    "Elastic Modulus": 193,
+    "Poisson Ratio": 0.28,
+    "Thermal Expansion": 16e-6,
+    "Description": "Marine-grade stainless steel with improved corrosion resistance"
+  },
+  {
+    "Material": "Glass Fiber Reinforced Polymer",
+    "Density": 1900,
+    "Yield Strength": 345,
+    "Ultimate Strength": 620,
+    "Elastic Modulus": 40,
+    "Poisson Ratio": 0.28,
+    "Thermal Expansion": 11e-6,
+    "Description": "Composite material with high strength-to-weight ratio"
+  },
+  {
+    "Material": "Carbon Fiber Reinforced Polymer",
+    "Density": 1600,
+    "Yield Strength": 600,
+    "Ultimate Strength": 1200,
+    "Elastic Modulus": 150,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 2e-6,
+    "Description": "High-performance composite material for lightweight structures"
+  },
+  {
+    "Material": "Titanium Alloy (Ti-6Al-4V)",
+    "Density": 4430,
+    "Yield Strength": 880,
+    "Ultimate Strength": 950,
+    "Elastic Modulus": 114,
+    "Poisson Ratio": 0.34,
+    "Thermal Expansion": 8.6e-6,
+    "Description": "Aerospace-grade titanium alloy with exceptional strength-to-weight ratio"
+  },
+  {
+    "Material": "Brick Masonry",
+    "Density": 1920,
+    "Yield Strength": 5,
+    "Ultimate Strength": 15,
+    "Elastic Modulus": 5,
+    "Poisson Ratio": 0.2,
+    "Thermal Expansion": 7e-6,
+    "Description": "Traditional building material with good compression strength"
+  },
+  {
+    "Material": "Polyvinyl Chloride (PVC)",
+    "Density": 1380,
+    "Yield Strength": 52,
+    "Ultimate Strength": 55,
+    "Elastic Modulus": 3,
+    "Poisson Ratio": 0.4,
+    "Thermal Expansion": 50e-6,
+    "Description": "Common thermoplastic polymer used in pipes and light structures"
+  },
+  {
+    "Material": "Copper (C11000)",
+    "Density": 8960,
+    "Yield Strength": 70,
+    "Ultimate Strength": 220,
+    "Elastic Modulus": 110,
+    "Poisson Ratio": 0.34,
+    "Thermal Expansion": 17e-6,
+    "Description": "Highly conductive metal with good formability"
+  },
+  {
+    "Material": "Granite",
+    "Density": 2750,
+    "Yield Strength": 4,
+    "Ultimate Strength": 20,
+    "Elastic Modulus": 50,
+    "Poisson Ratio": 0.23,
+    "Thermal Expansion": 8e-6,
+    "Description": "Natural stone with high compressive strength and durability"
+  },
+  {
+    "Material": "Fiber Reinforced Concrete",
+    "Density": 2400,
+    "Yield Strength": 50,
+    "Ultimate Strength": 70,
+    "Elastic Modulus": 28,
+    "Poisson Ratio": 0.21,
+    "Thermal Expansion": 10e-6,
+    "Description": "Concrete with fiber additives for improved tensile properties"
+  },
+  {
+    "Material": "Magnesium Alloy (AZ31B)",
+    "Density": 1770,
+    "Yield Strength": 200,
+    "Ultimate Strength": 260,
+    "Elastic Modulus": 45,
+    "Poisson Ratio": 0.35,
+    "Thermal Expansion": 26e-6,
+    "Description": "Lightweight structural metal with good strength-to-weight ratio"
+  },
+  {
+    "Material": "Tool Steel (A2)",
+    "Density": 7850,
+    "Yield Strength": 1470,
+    "Ultimate Strength": 1680,
+    "Elastic Modulus": 203,
+    "Poisson Ratio": 0.3,
+    "Thermal Expansion": 11.5e-6,
+    "Description": "High-carbon steel with excellent hardness and wear resistance"
+  },
+  {
+    "Material": "Brass (C26000)",
+    "Density": 8530,
+    "Yield Strength": 150,
+    "Ultimate Strength": 370,
+    "Elastic Modulus": 105,
+    "Poisson Ratio": 0.33,
+    "Thermal Expansion": 19.9e-6,
+    "Description": "Copper-zinc alloy with good corrosion resistance and formability"
+  },
+  {
+    "Material": "High-Performance Concrete (HPC)",
+    "Density": 2600,
+    "Yield Strength": 60,
+    "Ultimate Strength": 90,
+    "Elastic Modulus": 40,
+    "Poisson Ratio": 0.2,
+    "Thermal Expansion": 9.5e-6,
+    "Description": "Advanced concrete mixture with improved strength and durability"
+  }
+]
