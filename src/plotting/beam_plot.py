@@ -108,29 +108,19 @@ def plot_cantilever_beam_schematic(beam_length, loads, title="Cantilever Beam An
         showlegend=False
     ))
     
-    # Draw professional fixed support at x=0
-    # Main support rectangle
+# Draw professional fixed support at x=0 with native hatching
     fig.add_trace(go.Scatter(
         x=[-0.05, -0.05, -0.25, -0.25, -0.05],
-        y=[-0.2, 0.2, 0.2, -0.2, -0.2],
+        y=[-0.3, 0.3, 0.3, -0.3, -0.3],
         mode="lines",
-        line=dict(color="black", width=2),
+        line=dict(color="black", width=3),
         fill="toself",
-        fillcolor="rgba(169,169,169,0.7)",
+        fillcolor="rgba(169,169,169,0.4)",
+        fillpattern=dict(shape="/", fillmode="overlay", size=6, solidity=0.5, fgcolor="black"),
         name="Fixed Support",
         showlegend=True
     ))
-    
-    # Add hatching effect to fixed support (to make it look more professional)
-    for i in range(-3, 4):
-        y_pos = i/20
-        fig.add_trace(go.Scatter(
-            x=[-0.25, -0.05],
-            y=[y_pos, y_pos],
-            mode="lines",
-            line=dict(color="black", width=1),
-            showlegend=False
-        ))
+
     
     # Add vertical line connecting support to beam
     fig.add_trace(go.Scatter(
