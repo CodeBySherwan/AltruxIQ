@@ -565,7 +565,7 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     # Create decorative header
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║                ZYLO-X BEAM ANALYSIS ENGINE                   ║", 'cyan', attrs=['bold']))
+    print(colored("║                AltruxIQ Beam Analysis Engine                   ║", 'cyan', attrs=['bold']))
     print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     
     # Solver Information
@@ -575,7 +575,7 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     print(colored("│ Solver Type:", 'yellow') + colored(" Beam Finite Element Analysis", 'white'))
     print(colored("│ Solution Method:", 'yellow') + colored(" Direct Stiffness Method", 'white'))
     print(colored("│ Element Type:", 'yellow') + colored(" 1D Beam Element (Euler-Bernoulli)", 'white'))
-    print(colored("│ Solver Version:", 'yellow') + colored(" Zylo-X 1.02 Stable", 'white'))
+    print(colored("│ Solver Version:", 'yellow') + colored(" AltruxIQ 2.00 Alpha", 'white'))
     print(colored("│ Numerical Precision:", 'yellow') + colored(" Double Precision (64-bit)", 'white'))
     print(colored("│ Mesh Density:", 'yellow') + colored(" 10,000 Elements", 'white'))
     print(colored("│ Estimated Solution Time:", 'yellow') + colored(" < 1 sec", 'white'))
