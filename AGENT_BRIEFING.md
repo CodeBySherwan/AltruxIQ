@@ -457,97 +457,12 @@ Projects are saved as a JSON array. Each project dict structure:
 
 ## 12. Known Bugs and Defects
 
-### BUG-01 — Wrong MOI function for Hollow Circle (CRITICAL)
-**File:** `cli.py`, selection `'4'` in profile menu  
-**Code:** `Ix, shape, c, b, y_array = moi_solver.inertia_moment_circle()`  
-**Should be:** `moi_solver.inertia_moment_hollow_circle()`  
-**Effect:** Selecting "Hollow Circle" silently runs the solid circle calculation.
-
----
-
-### BUG-02 — Cantilever reaction unpacking order inconsistency (CRITICAL)
-**File:** `Solver.py`, function `solve_simple_beam()`, cantilever branch  
-**Code:**
-```python
-Va, Ma, Ha = Calculate_Cantilever_Reactions(...)
-```
-**But** `Calculate_Cantilever_Reactions` returns `(Va, Ha, Ma)`.  
-**Effect:** `Ma` and `Ha` are swapped. Reactions array is `[Va, Ma(wrong), Ha(wrong)]`.
-
----
-
-### BUG-03 — Variable name mismatch in `Matplot_ShearStress` (RUNTIME ERROR)
-**File:** `Plotting.py`, function `Matplot_ShearStress(X_Field, Shearstress)`  
-**Code:** `if len(ShearStress.shape) > 1:` — `ShearStress` is undefined; parameter is `Shearstress`  
-**Effect:** `NameError` at runtime when shear stress is 2D.
-
----
-
-### BUG-04 — `loads_dict` scope error in menu option 7 (RUNTIME ERROR)
-**File:** `cli.py`, selection `'7'` (Show Beam Schematic)  
-**Code:** `formatted_loads = format_loads_for_plotting(loads_dict)`  
-**Problem:** `loads_dict` is a local variable inside the `selection == '6'` block.
-If the user navigates to option 7 without having just exited option 6 in the same
-session, `loads_dict` is undefined.  
-**Fix:** Replace `loads_dict` with `loads` (the global dict).
-
----
-
-### BUG-05 — `beam_type` not initialised before use
-**File:** `cli.py`, multiple menu guards reference `beam_type`  
-**Problem:** `beam_type` has no default value set in `init()` or at module level.
-Accessing it before menu option 2 is selected causes a `NameError`.  
-**Fix:** Add `beam_type = None` to `init()` and module-level globals.
-
----
-
-### BUG-06 — Deflection boundary condition assumes end-supports only
-**File:** `Stress_solver.py`, `calculate_beam_deflection()`  
-**Problem:** The linear correction `deflection[-1] * (x / x[-1])` only enforces
-zero deflection at x=0 and x=L. If supports are at interior positions (overhanging
-spans), the result is numerically wrong.  
-**Scope:** Not currently triggered by the Simple Beam case as long as A=0, B=L.
-Will fail silently for any other support configuration.
-
----
-
-### BUG-07 — `Deflection` and `Shear_stress` may be undefined in combined plots
-**File:** `cli.py`, menu option `'5'` in postprocessing  
-**Code:** `Matplot_combined(..., Deflection=Deflection, ShearStress=Shear_stress)`  
-**Problem:** `Deflection` and `Shear_stress` are only defined if the user previously
-ran options 3 and 4 in the analysis menu. If skipped, this causes a `NameError`.  
-**Fix:** Check `project_state["deflection_calculated"]` and `project_state["stress_calculated"]`
-before passing these variables, or initialise them to `None`.
-
----
-
-### BUG-08 — `Q_array` calculated twice redundantly
-**File:** `cli.py`, analysis menu option `'4'`  
-**Code:**
-```python
-Q_array = first_moment_of_area_rect(b, y_array)
-calculate_shear_stress(Total_ShearForce, Q_array, Ix, b)   # result discarded
-Shear_stress = calculate_shear_stress(...)                  # called again
-```
-Minor inefficiency — no functional impact.
-
----
 
 ### BUG-09 — Shear stress formula uses constant `b` for non-rectangular sections
 **File:** `Stress_solver.py`, `calculate_shear_stress()`  
 **Problem:** τ = VQ/(Ib) uses a single constant width `b` for the entire cross-section.
 For I-beams and T-beams, the width varies with y (flange vs web). The current
 implementation is only accurate for rectangular cross-sections.
-
----
-
-### BUG-10 — `support_types` not persisted to project_state
-**File:** `cli.py`  
-**Problem:** `support_types` is assigned as a local tuple `("pin", "roller")` in
-multiple places but never stored in the project dict. When a project is loaded from
-disk, the variable is either stale or must be re-assigned manually.
-
----
 
 ## 13. Missing Features and Incomplete Implementations
 
@@ -672,35 +587,7 @@ User path for a fresh analysis:
 - **All plotting functions call `.show()` internally** — no figure is returned to caller
 
 ---
-
-## 19. Recommended Improvements (Prioritised)
-
-### Priority 1 — Must Fix (breaks functionality)
-1. Fix BUG-01: `inertia_moment_hollow_circle()` for profile choice `'4'`
-2. Fix BUG-02: Cantilever reaction unpacking order `Va, Ha, Ma = ...`
-3. Fix BUG-03: Rename `ShearStress` parameter consistently in `Matplot_ShearStress`
-4. Fix BUG-04: Replace `loads_dict` with `loads` in menu option `'7'`
-5. Fix BUG-05: Initialise `beam_type = None` in `init()` and at module level
-
-### Priority 2 — Data Integrity
-6. Fix BUG-07: Guard `Deflection` and `Shear_stress` with `None` defaults before combined plots
-7. Add load position validation (ensure all loads are within `[0, beam_length]`)
-8. Add support position validation (ensure `0 <= A < B <= beam_length`)
-
-### Priority 3 — Accuracy
-9. Implement section-variable-width shear stress for I-beams and T-beams
-10. Fix deflection BCs to support arbitrary support positions
-11. Add bending stress visualisation (both Plotly and Matplotlib)
-
-### Priority 4 — Architecture
-12. Replace global state with a `BeamProject` dataclass
-13. Add `requirements.txt`
-14. Add input validation decorators or a centralised validator
-15. Return figure objects from plot functions instead of calling `.show()` inside them
-
----
-
-## 20. How to Assist With This Project — Agent Instructions
+## 19. How to Assist With This Project — Agent Instructions
 
 When asked to help with this codebase, apply these rules:
 
