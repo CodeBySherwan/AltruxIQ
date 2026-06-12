@@ -6,6 +6,21 @@ import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MaxNLocator
 import matplotlib.font_manager as fm
 
+# --- TYPOGRAPHY HELPERS ---
+def format_plotly_sci(val):
+    """Converts extreme numbers to clean HTML exponents for Plotly."""
+    if abs(val) >= 1e5 or (abs(val) < 1e-3 and val != 0):
+        base, exp = f"{val:.2e}".split('e')
+        return f"{base} &times; 10<sup>{int(exp)}</sup>"
+    return f"{val:,.2f}"
+
+def format_matplot_sci(val):
+    """Converts extreme numbers to math formatting for Matplotlib."""
+    if abs(val) >= 1e5 or (abs(val) < 1e-3 and val != 0):
+        base, exp = f"{val:.2e}".split('e')
+        return f"${base} \\times 10^{{{int(exp)}}}$"
+    return f"{val:,.2f}"
+# --------------------------
 # =====================================
 # Plotly Plotting Functions
 # =====================================
@@ -44,7 +59,7 @@ def Plotly_shear_force(X_Field, Total_ShearForce, beam_length):
         mode="lines",
         line=dict(color='#1f77b4', width=3),  # More professional blue
         name="Shear Force",
-        hovertemplate="Position: %{x:.2f} m<br>Shear Force: %{y:.2f} N",
+        hovertemplate="<b>%{y:.2f} N</b><extra></extra>",
         fill="tozeroy",
         fillcolor="rgba(31,119,180,0.2)"  # Matching blue with transparency
     )
@@ -58,39 +73,14 @@ def Plotly_shear_force(X_Field, Total_ShearForce, beam_length):
         showlegend=False
     )
 
-    # --- Annotations for SFD ---
-    annotations_shear = [
-        dict(
-            x=x_shear[idx_max_shear],
-            y=max_shear,
-            text=f"Max: {max_shear} N",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=-30,
-            font=dict(color="#1f77b4", size=12)
-        ),
-        dict(
-            x=x_shear[idx_min_shear],
-            y=min_shear,
-            text=f"Min: {min_shear} N",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=30,
-            font=dict(color="#1f77b4", size=12)
-        )
-    ]
 
     # --- Layout for Shear Force Diagram ---
     layout_shear = go.Layout(
         title={
-            'text': "Shear Force Diagram",
-            'font': {'size': 24, 'family': 'Arial, sans-serif'}
+            'text': f"<b>Shear Force Diagram</b><br><span style='font-size:14px; color:gray;'>Maximum: {format_plotly_sci(max_shear)} N | Minimum: {format_plotly_sci(min_shear)} N</span>",
+            'font': {'family': 'Arial, sans-serif'},
+            'x': 0.5,
+            'y': 0.95
         },
         xaxis=dict(
             title={
@@ -114,7 +104,6 @@ def Plotly_shear_force(X_Field, Total_ShearForce, beam_length):
             linecolor='black',
             linewidth=1
         ),
-        annotations=annotations_shear,
         width=800,
         height=500,
         margin=dict(l=80, r=50, t=80, b=80),
@@ -162,7 +151,7 @@ def Plotly_Deflection(X_Field, Deflection, beam_length):
         mode="lines",
         line=dict(color='#2ca02c', width=3),  # Professional green
         name="Deflection",
-        hovertemplate="Position: %{x:.2f} m<br>Deflection: %{y:.6f} m",
+        hovertemplate="<b>%{y:.2f} mm</b><extra></extra>",
         fill="tozeroy",
         fillcolor="rgba(44,160,44,0.2)"  # Matching green with transparency
     )
@@ -176,39 +165,13 @@ def Plotly_Deflection(X_Field, Deflection, beam_length):
         showlegend=False
     )
 
-    # --- Annotations for Deflection ---
-    annotations_deflection = [
-        dict(
-            x=x_deflection[idx_max_deflection],
-            y=max_deflection,
-            text=f"Max: {max_deflection:.6f} m",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=-30,
-            font=dict(color="#2ca02c", size=12)
-        ),
-        dict(
-            x=x_deflection[idx_min_deflection],
-            y=min_deflection,
-            text=f"Min: {min_deflection:.6f} m",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=30,
-            font=dict(color="#2ca02c", size=12)
-        )
-    ]
 
     # --- Layout for Deflection Diagram ---
     layout_deflection = go.Layout(
         title={
-            'text': "Deflection Diagram",
-            'font': {'size': 24, 'family': 'Arial, sans-serif'}
+            'text': f"<b>Deflection Diagram</b><br><span style='font-size:14px; color:gray;'>Maximum: {format_plotly_sci(max_deflection)} m | Minimum: {format_plotly_sci(min_deflection)} m</span>",
+            'font': {'family': 'Arial, sans-serif'},
+            'x': 0.5, 'y': 0.95
         },
         xaxis=dict(
             title={
@@ -232,7 +195,7 @@ def Plotly_Deflection(X_Field, Deflection, beam_length):
             linecolor='black',
             linewidth=1
         ),
-        annotations=annotations_deflection,
+
         width=800,
         height=500,
         margin=dict(l=80, r=50, t=80, b=80),
@@ -301,7 +264,7 @@ def Plotly_ShearStress(X_Field, ShearStress, beam_length):
         mode="lines",
         line=dict(color='#d62728', width=3),  # Professional red
         name="Shear Stress",
-        hovertemplate="Position: %{x:.2f} m<br>Shear Stress: %{y:.2e} Pa",
+        hovertemplate="<b>%{y:.2f} Pa</b><extra></extra>",
         fill="tozeroy",
         fillcolor="rgba(214,39,40,0.2)"  # Matching red with transparency
     )
@@ -315,39 +278,13 @@ def Plotly_ShearStress(X_Field, ShearStress, beam_length):
         showlegend=False
     )
 
-    # --- Annotations for Shear Stress ---
-    annotations_stress = [
-        dict(
-            x=x_stress[idx_max_stress],
-            y=max_stress,
-            text=f"Max: {max_stress:.2e} Pa",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=-30,
-            font=dict(color="#d62728", size=12)
-        ),
-        dict(
-            x=x_stress[idx_min_stress],
-            y=min_stress,
-            text=f"Min: {min_stress:.2e} Pa",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=30,
-            font=dict(color="#d62728", size=12)
-        )
-    ]
 
     # --- Layout for Shear Stress Diagram ---
     layout_stress = go.Layout(
         title={
-            'text': "Shear Stress Diagram",
-            'font': {'size': 24, 'family': 'Arial, sans-serif'}
+            'text': f"<b>Shear Stress Diagram</b><br><span style='font-size:14px; color:gray;'>Maximum: {format_plotly_sci(max_stress)} Pa | Minimum: {format_plotly_sci(min_stress)} Pa</span>",
+            'font': {'family': 'Arial, sans-serif'},
+            'x': 0.5, 'y': 0.95
         },
         xaxis=dict(
             title={
@@ -372,7 +309,7 @@ def Plotly_ShearStress(X_Field, ShearStress, beam_length):
             linewidth=1,
             exponentformat='e'
         ),
-        annotations=annotations_stress,
+
         width=800,
         height=500,
         margin=dict(l=80, r=50, t=80, b=80),
@@ -381,7 +318,7 @@ def Plotly_ShearStress(X_Field, ShearStress, beam_length):
         hovermode='closest'
     )
     
-    # --- Build Figures ---
+    # --- Build Figures --- 
     fig_stress = go.Figure(data=[trace_stress, trace_line], layout=layout_stress)
     fig_stress.show()
 
@@ -420,7 +357,7 @@ def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length):
         mode="lines",
         line=dict(color='#9467bd', width=3),  # Professional purple
         name="Bending Moment",
-        hovertemplate="Position: %{x:.2f} m<br>Bending Moment: %{y:.2f} N·m",
+        hovertemplate="<b>%{y:.2f} N.m</b><extra></extra>",
         fill="tozeroy",
         fillcolor="rgba(148,103,189,0.2)"  # Matching purple with transparency
     )
@@ -434,34 +371,7 @@ def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length):
         showlegend=False
     )
 
-    # --- Annotations for BMD ---
-    annotations_bend = [
-        dict(
-            x=x_bend[idx_max_bend],
-            y=max_bend,
-            text=f"Max: {max_bend} N·m",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=-30,
-            font=dict(color="#9467bd", size=12)
-        ),
-        dict(
-            x=x_bend[idx_min_bend],
-            y=min_bend,
-            text=f"Min: {min_bend} N·m",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=1.5,
-            ax=0,
-            ay=30,
-            font=dict(color="#9467bd", size=12)
-        )
-    ]
-
+ 
     # --- Layout for Bending Moment Diagram ---
     layout_bend = go.Layout(
         title={
@@ -481,8 +391,9 @@ def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length):
         ),
         yaxis=dict(
             title={
-                'text': "Bending Moment (N·m)",
-                'font': {'size': 14, 'family': 'Arial, sans-serif'}
+                'text': f"<b>Bending Moment Diagram</b><br><span style='font-size:14px; color:gray;'>Maximum: {format_plotly_sci(max_bend)} N·m | Minimum: {format_plotly_sci(min_bend)} N·m</span>",
+                'font': {'family': 'Arial, sans-serif'},
+                'x': 0.5, 'y': 0.95
             },
             showgrid=True,
             gridcolor='rgba(211,211,211,0.5)',
@@ -490,7 +401,7 @@ def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length):
             linecolor='black',
             linewidth=1
         ),
-        annotations=annotations_bend,
+
         width=800,
         height=500,
         margin=dict(l=80, r=50, t=80, b=80),
@@ -570,33 +481,12 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
             fill="tozeroy",
             fillcolor="rgba(31,119,180,0.2)",
             name="Shear Force",
-            hovertemplate="Position: %{x:.2f} m<br>SF: %{y:.2f} N"
+            hovertemplate="<b>%{y:.2f} N</b><extra></extra>",
         ),
         row=1, col=1
     )
     
-    # Add annotations for SFD
-    fig.add_annotation(
-        x=X_Field[np.argmax(Total_ShearForce)], 
-        y=max_shear,
-        text=f"Max: {max_shear} N",
-        showarrow=True,
-        arrowhead=2,
-        ax=0, ay=-20,
-        row=1, col=1,
-        font=dict(color="#1f77b4")
-    )
-    
-    fig.add_annotation(
-        x=X_Field[np.argmin(Total_ShearForce)], 
-        y=min_shear,
-        text=f"Min: {min_shear} N",
-        showarrow=True,
-        arrowhead=2,
-        ax=0, ay=20,
-        row=1, col=1,
-        font=dict(color="#1f77b4")
-    )
+
     
     # --- Bending Moment ---
     max_bend = round(np.max(Total_BendingMoment), 3)
@@ -611,34 +501,12 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
             fill="tozeroy",
             fillcolor="rgba(148,103,189,0.2)",
             name="Bending Moment",
-            hovertemplate="Position: %{x:.2f} m<br>BM: %{y:.2f} N·m"
+            hovertemplate="<b>%{y:.2f} N.m</b><extra></extra>"
         ),
         row=2, col=1
     )
     
-    # Add annotations for BMD
-    fig.add_annotation(
-        x=X_Field[np.argmax(Total_BendingMoment)], 
-        y=max_bend,
-        text=f"Max: {max_bend} N·m",
-        showarrow=True,
-        arrowhead=2,
-        ax=0, ay=-20,
-        row=2, col=1,
-        font=dict(color="#9467bd")
-    )
-    
-    fig.add_annotation(
-        x=X_Field[np.argmin(Total_BendingMoment)], 
-        y=min_bend,
-        text=f"Min: {min_bend} N·m",
-        showarrow=True,
-        arrowhead=2,
-        ax=0, ay=20,
-        row=2, col=1,
-        font=dict(color="#9467bd")
-    )
-    
+  
     # --- Deflection (if provided) ---
     current_row = 3
     if Deflection is not None:
@@ -654,33 +522,12 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
                 fill="tozeroy",
                 fillcolor="rgba(44,160,44,0.2)",
                 name="Deflection",
-                hovertemplate="Position: %{x:.2f} m<br>Defl: %{y:.6f} m"
+                hovertemplate="<b>%{y:.2f} mm</b><extra></extra>"
             ),
             row=current_row, col=1
         )
         
-        fig.add_annotation(
-            x=X_Field[np.argmax(Deflection)], 
-            y=max_defl,
-            text=f"Max: {max_defl:.6f} m",
-            showarrow=True,
-            arrowhead=2,
-            ax=0, ay=-20,
-            row=current_row, col=1,
-            font=dict(color="#2ca02c")
-        )
-        
-        fig.add_annotation(
-            x=X_Field[np.argmin(Deflection)], 
-            y=min_defl,
-            text=f"Min: {min_defl:.6f} m",
-            showarrow=True,
-            arrowhead=2,
-            ax=0, ay=20,
-            row=current_row, col=1,
-            font=dict(color="#2ca02c")
-        )
-        
+
         current_row += 1
     
     # --- Shear Stress (if provided) ---
@@ -704,34 +551,13 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
                 fill="tozeroy",
                 fillcolor="rgba(214,39,40,0.2)",
                 name="Shear Stress",
-                hovertemplate="Position: %{x:.2f} m<br>Stress: %{y:.2e} Pa"
+                hovertemplate="<b>%{y:.2f} Pa</b><extra></extra>"
             ),
             row=current_row, col=1
         )
         
         
-        fig.add_annotation(
-            x=X_Field[np.argmax(ShearStress)], 
-            y=max_stress,
-            text=f"Max: {max_stress:.2e} Pa",
-            showarrow=True,
-            arrowhead=2,
-            ax=0, ay=-20,
-            row=current_row, col=1,
-            font=dict(color="#d62728")
-        )
-        
-        fig.add_annotation(
-            x=X_Field[np.argmin(ShearStress)], 
-            y=min_stress,
-            text=f"Min: {min_stress:.2e} Pa",
-            showarrow=True,
-            arrowhead=2,
-            ax=0, ay=20,
-            row=current_row, col=1,
-            font=dict(color="#d62728")
-        )
-    
+
     # Update layout and axis labels
     fig.update_layout(
         title={
@@ -879,7 +705,7 @@ def Plotly_BendingStress(X_Field, BendingStress, beam_length):
         mode="lines",
         line=dict(color='#8c564b', width=3),  # Professional brown
         name="Bending Stress",
-        hovertemplate="Position: %{x:.2f} m<br>Bending Stress: %{y:.2e} Pa",
+        hovertemplate="<b>%{y:.2f} Pa</b><extra></extra>",
         fill="tozeroy",
         fillcolor="rgba(140,86,75,0.2)"  # Matching brown with transparency
     )
@@ -1007,7 +833,7 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length):
             mode="lines",
             line=dict(color='#1f77b4', width=3),
             name="Shear Force",
-            hovertemplate="Position: %{x:.2f} m<br>Shear Force: %{y:.2f} N",
+            hovertemplate="<b>%{y:.2f} N</b><extra></extra>",
             fill="tozeroy",
             fillcolor="rgba(31,119,180,0.2)"
         ),
@@ -1041,7 +867,7 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length):
             mode="lines",
             line=dict(color='#9467bd', width=3),
             name="Bending Moment",
-            hovertemplate="Position: %{x:.2f} m<br>Bending Moment: %{y:.2f} N·m",
+            hovertemplate="<b>%{y:.2f} N.M</b><extra></extra>",
             fill="tozeroy",
             fillcolor="rgba(148,103,189,0.2)"
         ),
@@ -1060,63 +886,7 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length):
         row=2, col=1
     )
     
-    # Add annotations for SFD
-    fig.add_annotation(
-        x=X_Field[idx_max_shear],
-        y=max_shear,
-        text=f"Max: {max_shear} N",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=1.5,
-        ax=0,
-        ay=-30,
-        font=dict(color="#1f77b4", size=12),
-        row=1, col=1
-    )
-    
-    fig.add_annotation(
-        x=X_Field[idx_min_shear],
-        y=min_shear,
-        text=f"Min: {min_shear} N",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=1.5,
-        ax=0,
-        ay=30,
-        font=dict(color="#1f77b4", size=12),
-        row=1, col=1
-    )
-    
-    # Add annotations for BMD
-    fig.add_annotation(
-        x=X_Field[idx_max_bend],
-        y=max_bend,
-        text=f"Max: {max_bend} N·m",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=1.5,
-        ax=0,
-        ay=-30,
-        font=dict(color="#9467bd", size=12),
-        row=2, col=1
-    )
-    
-    fig.add_annotation(
-        x=X_Field[idx_min_bend],
-        y=min_bend,
-        text=f"Min: {min_bend} N·m",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=1.5,
-        ax=0,
-        ay=30,
-        font=dict(color="#9467bd", size=12),
-        row=2, col=1
-    )
+
     
     # Update layout
     fig.update_layout(
@@ -1585,8 +1355,9 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment):
     plt.rcParams['grid.alpha'] = 0.7
     
     # Create figure with GridSpec for better control
-    fig = plt.figure(figsize=(12, 10), dpi=100)
-    gs = gridspec.GridSpec(2, 1, height_ratios=[1, 1], hspace=0.25)
+# Increase the figure height significantly and use GridSpec to control spacing
+    fig = plt.figure(figsize=(12, 5 * num_plots), dpi=100) # Increased height per plot
+    gs = gridspec.GridSpec(num_plots, 1, height_ratios=[1] * num_plots, hspace=0.6) # Increased hspace
     
     # Shear Force plot
     ax_sf = fig.add_subplot(gs[0])
@@ -1656,7 +1427,7 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment):
     # Final touches
     ax_sf.legend(loc='best', fontsize=12)
     ax_bm.legend(loc='best', fontsize=12)
-    plt.tight_layout()
+    plt.tight_layout(h_pad=3.0, pad=2.0)
     plt.show()
 
 
@@ -1696,8 +1467,9 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     plt.rcParams['grid.alpha'] = 0.7
     
     # Create figure with GridSpec for better control
-    fig = plt.figure(figsize=(12, 3.5 * num_plots), dpi=100)
-    gs = gridspec.GridSpec(num_plots, 1, height_ratios=[1] * num_plots, hspace=0.3)
+# Increase the figure height significantly and use GridSpec to control spacing
+    fig = plt.figure(figsize=(12, 5 * num_plots), dpi=100) # Increased height per plot
+    gs = gridspec.GridSpec(num_plots, 1, height_ratios=[1] * num_plots, hspace=0.6) # Increased hspace
     
     # Add super title
     fig.suptitle('Beam Analysis Results', fontsize=24, y=0.98)
@@ -1713,7 +1485,8 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     # 1. Shear Force plot
     ax_sf = fig.add_subplot(gs[0])
     ax_sf.plot(X_Field, Total_ShearForce, color=colors['sf']['line'], linewidth=2.5, label='Shear Force')
-    
+    if 0 < num_plots - 1:
+        ax_sf.tick_params(labelbottom=False)
     # Fill areas
     ax_sf.fill_between(X_Field, Total_ShearForce, 0, where=(Total_ShearForce >= 0), 
                      interpolate=True, alpha=0.3, color=colors['sf']['fill_pos'])
@@ -1722,7 +1495,14 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     
     # Reference line and styling for SF
     ax_sf.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
-    ax_sf.set_title('Shear Force Diagram', fontsize=18, pad=15)
+    max_V = np.max(Total_ShearForce)
+    min_V = np.min(Total_ShearForce)
+    ax_sf.set_title(
+        f"Shear Force Diagram\nMax: {format_matplot_sci(max_V)} N  |  Min: {format_matplot_sci(min_V)} N", 
+        fontsize=11, 
+        fontweight='bold', 
+        pad=10
+    )
     ax_sf.set_ylabel('Shear Force (N)', fontsize=14, labelpad=10)
     ax_sf.grid(True, linestyle='--', alpha=0.5, color='gray')
     ax_sf.tick_params(axis='both', which='major', labelsize=12, width=1.5, length=5)
@@ -1750,7 +1530,8 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     # 2. Bending Moment plot
     ax_bm = fig.add_subplot(gs[1], sharex=ax_sf)
     ax_bm.plot(X_Field, Total_BendingMoment, color=colors['bm']['line'], linewidth=2.5, label='Bending Moment')
-    
+    if 1 < num_plots - 1:
+        ax_bm.tick_params(labelbottom=False)
     # Fill areas
     ax_bm.fill_between(X_Field, Total_BendingMoment, 0, where=(Total_BendingMoment >= 0), 
                      interpolate=True, alpha=0.3, color=colors['bm']['fill_pos'])
@@ -1759,7 +1540,14 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     
     # Reference line and styling for BM
     ax_bm.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
-    ax_bm.set_title('Bending Moment Diagram', fontsize=18, pad=15)
+    max_V = np.max(Total_ShearForce)
+    min_V = np.min(Total_ShearForce)
+    ax_bm.set_title(
+        f"Bending Moment Diagram\nMax: {format_matplot_sci(max_V)} N  |  Min: {format_matplot_sci(min_V)} N", 
+        fontsize=11, 
+        fontweight='bold', 
+        pad=10
+    )
     ax_bm.set_ylabel('Bending Moment (N·m)', fontsize=14, labelpad=10)
     ax_bm.grid(True, linestyle='--', alpha=0.5, color='gray')
     ax_bm.tick_params(axis='both', which='major', labelsize=12, width=1.5, length=5)
@@ -1790,7 +1578,8 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
     if Deflection is not None:
         ax_defl = fig.add_subplot(gs[current_row], sharex=ax_sf)
         ax_defl.plot(X_Field, Deflection, color=colors['defl']['line'], linewidth=2.5, label='Deflection')
-        
+        if current_row < num_plots - 1:
+         ax_defl.tick_params(labelbottom=False)
         # Fill areas
         ax_defl.fill_between(X_Field, Deflection, 0, where=(Deflection >= 0), 
                            interpolate=True, alpha=0.3, color=colors['defl']['fill_pos'])
@@ -1799,7 +1588,12 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
         
         # Reference line and styling for Deflection
         ax_defl.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
-        ax_defl.set_title('Deflection Diagram', fontsize=18, pad=15)
+        ax_defl.set_title(
+        f"Deflection Diagram\nMax: {format_matplot_sci(max_V)} N  |  Min: {format_matplot_sci(min_V)} N", 
+        fontsize=11, 
+        fontweight='bold', 
+        pad=10
+    )
         ax_defl.set_ylabel('Deflection (m)', fontsize=14, labelpad=10)
         ax_defl.grid(True, linestyle='--', alpha=0.5, color='gray')
         ax_defl.tick_params(axis='both', which='major', labelsize=12, width=1.5, length=5)
@@ -1839,7 +1633,8 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
             
         ax_stress = fig.add_subplot(gs[current_row], sharex=ax_sf)
         ax_stress.plot(X_Field, ShearStress, color=colors['stress']['line'], linewidth=2.5, label='Shear Stress')
-        
+        if current_row < num_plots - 1:
+            ax_stress.tick_params(labelbottom=False)
         # Fill areas
         ax_stress.fill_between(X_Field, ShearStress, 0, where=(ShearStress >= 0), 
                              interpolate=True, alpha=0.3, color=colors['stress']['fill_pos'])
@@ -1848,7 +1643,12 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
         
         # Reference line and styling for Shear Stress
         ax_stress.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
-        ax_stress.set_title('Shear Stress Diagram', fontsize=18, pad=15)
+        ax_stress.set_title(
+        f"Shear Stress Diagram\nMax: {format_matplot_sci(max_V)} N  |  Min: {format_matplot_sci(min_V)} N", 
+        fontsize=11, 
+        fontweight='bold', 
+        pad=10
+    )
         ax_stress.set_ylabel('Shear Stress (Pa)', fontsize=14, labelpad=10)
         ax_stress.grid(True, linestyle='--', alpha=0.5, color='gray')
         ax_stress.tick_params(axis='both', which='major', labelsize=12, width=1.5, length=5)
@@ -1875,14 +1675,9 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
                          arrowprops=dict(arrowstyle="->", color=colors['stress']['fill_neg'], lw=1.5),
                          fontsize=12, color=colors['stress']['fill_neg'], fontweight='bold')
     
-    # X-axis label for the bottom subplot only
-    if ShearStress is not None:
-        ax_stress.set_xlabel('Position along Beam (m)', fontsize=14, labelpad=10)
-    elif Deflection is not None:
-        ax_defl.set_xlabel('Position along Beam (m)', fontsize=14, labelpad=10)
-    else:
-        ax_bm.set_xlabel('Position along Beam (m)', fontsize=14, labelpad=10)
-    
+    ax_stress.tick_params(labelbottom=False)
+    ax_defl.tick_params(labelbottom=False)
+    ax_bm.tick_params(labelbottom=False)
     # Add legends
     ax_sf.legend(loc='best', fontsize=12)
     ax_bm.legend(loc='best', fontsize=12)
@@ -1890,8 +1685,9 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=
         ax_defl.legend(loc='best', fontsize=12)
     if ShearStress is not None:
         ax_stress.legend(loc='best', fontsize=12)
-    
-    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Adjust for the suptitle
+        
+    plt.tight_layout(h_pad=3.0, pad=2.0)
+    #plt.tight_layout(rect=[0, 0, 1, 0.97])  # Adjust for the suptitle
     plt.show()
 
 #====================================================================
