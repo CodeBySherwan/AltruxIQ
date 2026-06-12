@@ -852,8 +852,8 @@ def run_extended_menu():
                     # Catch the error! If result is None, the user entered bad data.
                     # 'continue' loops back to let them try again without crashing.
                     if result is None:
-                        print_error("Please try again !!! ")
-                        time.sleep(2)
+                        print_error("Please try again!!!")
+                        time.sleep(2.5)
                         continue
                         
                     # If we made it here, the data is good. Safely unpack the 6 variables.
