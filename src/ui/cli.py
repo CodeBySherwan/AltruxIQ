@@ -63,6 +63,7 @@ shape = ""
 c = 0.0
 b = 0.0
 y_array = np.array([])
+section_dims = {}
 support_types = ("pin", "roller")  # BUG-10 FIX: module-level default; overwritten on load/save
 beam_type = None  # BUG-05 FIX: initialise at module level to prevent NameError
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
@@ -126,11 +127,11 @@ def load_project():
     """Load a project from storage into the current session."""
     global current_project, beam_length, A, B, A_restraint, B_restraint, A_type, B_type
     global X_Field, Total_ShearForce, Total_BendingMoment, Reactions, loads
-    global Ix, shape, c, b, y_array, project_state
+    global Ix, shape, c, b, y_array, section_dims, project_state
     global elastic_modulus, selected_material, density, yield_strength, ultimate_strength, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads
     global beam_type, support_types  # BUG-10 FIX: support_types must be a global
-
+    
     load_projects_from_disk()
 
     if not beam_storage:
@@ -220,6 +221,7 @@ def load_project():
         c = profile_data.get('c', 0)
         b = profile_data.get('b', 0)
         y_array = np.array(profile_data.get('y_array', []))
+        section_dims = profile_data.get('section_dims', {})
 
         # Load material data
         material_data = current_project.get('material', {})
@@ -406,7 +408,8 @@ def save_project():
         'shape': shape,
         'c': c,
         'b': b,
-        'y_array': safe_serialize(y_array)
+        'y_array': safe_serialize(y_array),
+        'section_dims': section_dims
     }
     
     # Create proper material data structure
@@ -713,7 +716,7 @@ def check_unsaved_changes():
 def run_extended_menu():
     global current_project, project_state
     global beam_length, A, B, A_restraint, B_restraint, A_type, B_type
-    global Ix, shape, c, b, y_array
+    global Ix, shape, c, b, y_array, section_dims
     global selected_material, density, yield_strength, ultimate_strength, elastic_modulus, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads, loads
     global support_types
@@ -825,25 +828,36 @@ def run_extended_menu():
                         print_error("Note: Please define beam type !!!!")
                         cprint("----------------------------------------------","white")
                         print("")
+                        
                     if profile_choice == '1':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_ibeam()
+                        result = moi_solver.inertia_moment_ibeam()
                     elif profile_choice == '2':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_tbeam()
+                        result = moi_solver.inertia_moment_tbeam()
                     elif profile_choice == '3':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_circle()
+                        result = moi_solver.inertia_moment_circle()
                     elif profile_choice == '4':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_hollow_circle()
+                        result = moi_solver.inertia_moment_hollow_circle()
                     elif profile_choice == '5':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_square()
+                        result = moi_solver.inertia_moment_square()
                     elif profile_choice == '6':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_hollow_square()
+                        result = moi_solver.inertia_moment_hollow_square()
                     elif profile_choice == '7':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_rectangle()
+                        result = moi_solver.inertia_moment_rectangle()
                     elif profile_choice == '8':
-                        Ix, shape, c, b, y_array = moi_solver.inertia_moment_hollow_rectangle()
+                        result = moi_solver.inertia_moment_hollow_rectangle()
                     else:
                         print_error("Invalid choice! Please try again.")
                         continue
+                        
+                    # Catch the error! If result is None, the user entered bad data.
+                    # 'continue' loops back to let them try again without crashing.
+                    if result is None:
+                        print_error("Please try again !!! ")
+                        time.sleep(2)
+                        continue
+                        
+                    # If we made it here, the data is good. Safely unpack the 6 variables.
+                    Ix, shape, c, b, y_array, section_dims = result
                         
                     project_state["profile_saved"] = True
                     project_state["has_unsaved_changes"] = True
@@ -1272,8 +1286,8 @@ def run_extended_menu():
                         print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
         
                         # Perform actual calculations
-                        # BUG-09 FIX: build section-aware b(y) for correct τ = VQ/(Ib(y))
-                        b_array = width_array_for_section(shape, c, b, y_array)
+                        #BUG-09 FIX: build section-aware b(y) for correct τ = VQ/(Ib(y))
+                        b_array = width_array_for_section(shape, section_dims, y_array)
                         Q_array = first_moment_of_area_general(b_array, y_array)
                         Shear_stress = calculate_shear_stress(Total_ShearForce, Q_array, Ix, b_array)
                         Max_Shear_stress = np.max(np.abs(Shear_stress))
