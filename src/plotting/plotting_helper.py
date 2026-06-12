@@ -113,60 +113,48 @@ import plotly.graph_objs as go
 
 def draw_moment(x, magnitude):
     """
-    Create a simple text-based representation of moment using direction emojis,
-    positioned close to the beam.
-    
-    Parameters:
-    -----------
-    x : float
-        Position of the moment along the beam
-    magnitude : float
-        Magnitude of the moment where:
-        - Negative = CLOCKWISE rotation (⭮)
-        - Positive = COUNTERCLOCKWISE rotation (⭯)
-    
-    Returns:
-    --------
-    list
-        List of plotly traces representing the moment
+    Create a true parametric vector arc for moments.
     """
     traces = []
     
-    # Determine direction symbol based on sign
-    if magnitude < 0:  # Clockwise
-        direction_symbol = "⭮"  # Clockwise arrow emoji
-    else:  # Counterclockwise
-        direction_symbol = "⭯"  # Counterclockwise arrow emoji
+    # Generate a smooth semi-circle arc above the beam
+    theta = np.linspace(0, np.pi, 30)
+    radius = 0.3
+    x_arc = x + radius * np.cos(theta)
+    y_arc = radius * np.sin(theta)
     
-    # Add moment symbol trace - positioned closer to the beam
+    # Draw the arc line
     traces.append(go.Scatter(
-        x=[x],
-        y=[0],  # Positioned much closer to the beam (y=0)
-        mode="text",
-        text=direction_symbol,
-        textfont=dict(
-            size=50,  # Slightly smaller to not overwhelm the diagram
-            color="blue",
-            family="Arial, sans-serif"
-        ),
-        showlegend=False
+        x=x_arc, y=y_arc, mode="lines",
+        line=dict(color="blue", width=3),
+        showlegend=False,
+        hoverinfo="skip"
     ))
     
-    # Add magnitude label - positioned right next to the symbol
+    # Determine arrowhead position and direction
+    # Counter-clockwise (positive) gets arrow on the left, Clockwise gets arrow on the right
+    arrow_x = x_arc[-1] if magnitude > 0 else x_arc[0]
+    arrow_y = y_arc[-1] if magnitude > 0 else y_arc[0]
+    symbol = "triangle-left" if magnitude > 0 else "triangle-right"
+    
     traces.append(go.Scatter(
-        x=[x],
-        y=[0.3],  # Positioned just above the symbol
-        mode="text",
-        text=f"{abs(magnitude):.3f} Nm",
-        textfont=dict(
-            size=18,
-            color="blue",
-            family="Arial, sans-serif"
-        ),
-        showlegend=False
+        x=[arrow_x], y=[arrow_y], mode="markers",
+        marker=dict(symbol=symbol, color="blue", size=12),
+        showlegend=False,
+        hoverinfo="skip"
+    ))
+    
+    # Add magnitude label above the arc
+    traces.append(go.Scatter(
+        x=[x], y=[radius + 0.15], mode="text",
+        text=[f"<b>{abs(magnitude):.2f} N·m</b>"],
+        textfont=dict(size=14, color="blue", family="Arial, sans-serif"),
+        showlegend=False,
+        hoverinfo="skip"
     ))
     
     return traces
+    
 def draw_reaction(x, magnitude):
     arrow_tip = 1.2 * (1 if magnitude > 0 else -1)
     return go.Scatter(
