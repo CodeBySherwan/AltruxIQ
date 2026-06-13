@@ -1235,8 +1235,7 @@ def run_extended_menu():
         
                         # Perform actual calculation
                         Deflection, Slope, curv = calculate_beam_deflection(
-                            X_Field, Total_BendingMoment, elastic_modulus, Ix)
-        
+                            X_Field, Total_BendingMoment, elastic_modulus, Ix, beam_type, A, B)
                         # Update project state
                         project_state["deflection_calculated"] = True
                         project_state["has_unsaved_changes"] = True
