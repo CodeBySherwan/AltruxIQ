@@ -458,11 +458,7 @@ Projects are saved as a JSON array. Each project dict structure:
 ## 12. Known Bugs and Defects
 
 
-### BUG-09 — Shear stress formula uses constant `b` for non-rectangular sections
-**File:** `Stress_solver.py`, `calculate_shear_stress()`  
-**Problem:** τ = VQ/(Ib) uses a single constant width `b` for the entire cross-section.
-For I-beams and T-beams, the width varies with y (flange vs web). The current
-implementation is only accurate for rectangular cross-sections.
+No known Bugs found yet and all the old bugs have been solved .
 
 ## 13. Missing Features and Incomplete Implementations
 
