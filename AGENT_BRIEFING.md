@@ -43,8 +43,9 @@ project_root/
 │   │   ├── Menus.py            # Menu display functions
 │   │   ├── inputs.py           # User input handlers
 │   │   └── beam_projects.json  # Saved projects (UI directory)
-│   └── database/
+│   └── data/
 │       ├── __init__.py
+│       ├── materials.json
 …
 ```
 ## 2. File Inventory and Responsibilities
