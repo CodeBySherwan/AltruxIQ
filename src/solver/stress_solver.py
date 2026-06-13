@@ -129,22 +129,40 @@ def first_moment_of_area_rect(b, h, y_array):
 # ---------------------------------------------------------------------------
 # Standard Post-Processing Engines
 # ---------------------------------------------------------------------------
-
-def calculate_beam_deflection(x_field, bending_moment, elastic_modulus, moment_of_inertia):
+def calculate_beam_deflection(x_field, bending_moment, elastic_modulus, moment_of_inertia, beam_type, A=0, B=0):
     """
-    Calculate beam deflection using the double integration of the bending moment equation.
+    Calculate beam deflection using double integration with exact boundary conditions.
     """
-    # Calculate curvature: M/(EI)
+    # 1. Calculate curvature: M/(EI)
     curvature = bending_moment / (elastic_modulus * moment_of_inertia)
     
-    # Calculate slope by integrating curvature (first integration)
-    slope = cumulative_trapezoid(curvature, x_field, initial=0)
+    # 2. First integration: raw slope
+    slope_raw = cumulative_trapezoid(curvature, x_field, initial=0)
     
-    # Calculate deflection by integrating slope (second integration)
-    deflection = cumulative_trapezoid(slope, x_field, initial=0)
+    # 3. Second integration: raw deflection
+    deflection_raw = cumulative_trapezoid(slope_raw, x_field, initial=0)
     
-    return deflection, slope, curvature
-
+    if beam_type == "Cantilever":
+        # Cantilever fixed at x=0. The initial=0 condition handles this perfectly.
+        return deflection_raw, slope_raw, curvature
+        
+    elif beam_type == "Simple":
+        # For simply supported beams, deflection must be 0 at supports A and B.
+        # Use np.interp to find the exact raw deflection at the support coordinates.
+        v_A = np.interp(A, x_field, deflection_raw)
+        v_B = np.interp(B, x_field, deflection_raw)
+        
+        # Solve for the true constants of integration (C1 for slope, C2 for deflection)
+        # v(x) = v_raw(x) + C1*x + C2
+        C1 = (v_A - v_B) / (B - A)
+        C2 = -v_A - C1 * A
+        
+        # Apply corrections to the entire field
+        deflection_true = deflection_raw + C1 * x_field + C2
+        slope_true = slope_raw + C1
+        
+        return deflection_true, slope_true, curvature
+        
 def calculate_shear_stress(shear_force, Q_array, moment_of_inertia, b):
     """
     Calculate shear stress distribution across the beam length and height.
