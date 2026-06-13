@@ -21,6 +21,34 @@ def format_matplot_sci(val):
         return f"${base} \\times 10^{{{int(exp)}}}$"
     return f"{val:,.2f}"
 # --------------------------
+# --- DATA ANALYSIS HELPERS ---
+def find_critical_points(X, BM):
+    """
+    Finds maximum bending moment location and points of contraflexure (zero-crossings).
+    """
+    # 1. Find absolute maximum bending moment
+    idx_max = np.argmax(np.abs(BM))
+    max_x = X[idx_max]
+    max_y = BM[idx_max]
+    
+    # 2. Find points of contraflexure (where BM crosses zero)
+    # Ignore the first and last few points to avoid false triggers at supports
+    contraflexure_x = []
+    signs = np.sign(BM)
+    sign_changes = np.where(np.diff(signs))[0]
+    
+    for idx in sign_changes:
+        # Ignore crossings exactly at the boundaries (x=0 or x=L)
+        if idx > 5 and idx < len(X) - 5:
+            # Simple linear interpolation for the exact zero-crossing x-coordinate
+            dx = X[idx+1] - X[idx]
+            dy = BM[idx+1] - BM[idx]
+            if dy != 0:
+                x_exact = X[idx] - BM[idx] * (dx / dy)
+                contraflexure_x.append(x_exact)
+                
+    return max_x, max_y, contraflexure_x
+# -----------------------------
 # =====================================
 # Plotly Plotting Functions
 # =====================================
@@ -375,8 +403,9 @@ def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length):
     # --- Layout for Bending Moment Diagram ---
     layout_bend = go.Layout(
         title={
-            'text': "Bending Moment Diagram",
-            'font': {'size': 24, 'family': 'Arial, sans-serif'}
+            'text': f"<b>Bending Moment Diagram</b><br><span style='font-size:14px; color:gray;'>Maximum: {format_plotly_sci(max_bend)} N·m | Minimum: {format_plotly_sci(min_bend)} N·m</span>",
+            'font': {'family': 'Arial, sans-serif'},
+            'x': 0.5, 'y': 0.95
         },
         xaxis=dict(
             title={
@@ -438,6 +467,15 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
     --------
     None, displays the plot
     """
+    # Slice arrays to every 5th point to optimize browser DOM performance (2000 pts instead of 10k)
+    step = 5
+    X_Field = X_Field[::step]
+    Total_ShearForce = Total_ShearForce[::step]
+    Total_BendingMoment = Total_BendingMoment[::step]
+    if Deflection is not None:
+        Deflection = Deflection[::step]
+    if ShearStress is not None:
+        ShearStress = ShearStress[::step]
     # Determine number of rows based on provided data
     num_rows = 2  # SFD and BMD are always included
     if Deflection is not None:
@@ -486,7 +524,27 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
         row=1, col=1
     )
     
-
+    # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(X_Field, Total_ShearForce)
+    
+    # Add Point of Maximum Total_ShearForce
+    fig.add_trace(go.Scatter(
+        x=[max_x], y=[max_y],
+        mode='markers',
+        marker=dict(symbol='diamond', size=10, color='blue', line=dict(width=2, color='darkblue')),
+        name='Max Shear Force',
+        hovertemplate="<b>Max SF</b><br>X: %{x:.2f} m<br>value: %{y:.2f} N<extra></extra>"
+    ), row=1, col=1)
+    
+    # Add Points of Contraflexure (if any exist)
+    if contra_x:
+        fig.add_trace(go.Scatter(
+            x=contra_x, y=[0]*len(contra_x),
+            mode='markers',
+            marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+            name='Point of Contraflexure',
+            hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} m<br>value: 0 N<extra></extra>"
+        ), row=1, col=1)
     
     # --- Bending Moment ---
     max_bend = round(np.max(Total_BendingMoment), 3)
@@ -506,7 +564,28 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
         row=2, col=1
     )
     
-  
+     # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(X_Field, Total_BendingMoment)
+    
+    # Add Point of Maximum Bending Moment
+    fig.add_trace(go.Scatter(
+        x=[max_x], y=[max_y],
+        mode='markers',
+        marker=dict(symbol='diamond', size=10, color='purple', line=dict(width=2, color='darkviolet')),
+        name='Max Shear Force',
+        hovertemplate="<b>Max SF</b><br>X: %{x:.2f} m<br>value: %{y:.2f} N.m<extra></extra>"
+    ), row=2, col=1)
+    
+    # Add Points of Contraflexure (if any exist)
+    if contra_x:
+        fig.add_trace(go.Scatter(
+            x=contra_x, y=[0]*len(contra_x),
+            mode='markers',
+            marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+            name='Point of Contraflexure',
+            hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} m<br>value: 0 N.m<extra></extra>"
+        ), row=2, col=1) 
+    
     # --- Deflection (if provided) ---
     current_row = 3
     if Deflection is not None:
@@ -525,10 +604,30 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
                 hovertemplate="<b>%{y:.2f} mm</b><extra></extra>"
             ),
             row=current_row, col=1
-        )
+            )
+        # Calculate critical structural points
+        max_x, max_y, contra_x = find_critical_points(X_Field, Deflection)
         
+        # Add Point of Maximum Deflection
+        fig.add_trace(go.Scatter(
+            x=[max_x], y=[max_y],
+            mode='markers',
+            marker=dict(symbol='diamond', size=10, color='green', line=dict(width=2, color='lime')),
+            name='Deflection',
+            hovertemplate="<b>Max DF</b><br>X: %{x:.2f} mm<br>value: %{y:.2f} N<extra></extra>"
+        ), row=3, col=1)
+        
+        # Add Points of Contraflexure (if any exist)
+        if contra_x:
+            fig.add_trace(go.Scatter(
+                x=contra_x, y=[0]*len(contra_x),
+                mode='markers',
+                marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+                name='Point of Contraflexure',
+                hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} mm<br>value: 0 N·m<extra></extra>"
+            ), row=3, col=1)       
 
-        current_row += 1
+            current_row = 4
     
     # --- Shear Stress (if provided) ---
     if ShearStress is not None:
@@ -553,19 +652,39 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
                 name="Shear Stress",
                 hovertemplate="<b>%{y:.2f} Pa</b><extra></extra>"
             ),
-            row=current_row, col=1
+            row=4, col=1
         )
+            
+        # Calculate critical structural points
+        max_x, max_y, contra_x = find_critical_points(X_Field, ShearStress)
         
+        # Add Point of Maximum ShearStress
+        fig.add_trace(go.Scatter(
+            x=[max_x], y=[max_y],
+            mode='markers',
+            marker=dict(symbol='diamond', size=10, color='red', line=dict(width=2, color='darkred')),
+            name='Max ShearStress',
+            hovertemplate="<b>Max SS</b><br>X: %{x:.2f} Pa<br>Value: %{y:.2f} N<extra></extra>"
+        ), row=4, col=1)
         
+        # Add Points of Contraflexure (if any exist)
+        if contra_x:
+            fig.add_trace(go.Scatter(
+                x=contra_x, y=[0]*len(contra_x),
+                mode='markers',
+                marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+                name='Point of Contraflexure',
+                hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} Pa<br>M: 0 N·m<extra></extra>"
+            ), row=4, col=1)       
 
     # Update layout and axis labels
     fig.update_layout(
         title={
-            'text': "Beam Analysis Results",
+            'text': " ",
             'font': {'size': 24, 'family': 'Arial, sans-serif'},
             'y': 0.98
         },
-        height=250 * num_rows + 100,
+        height=250 * num_rows + 350,
         width=900,
         margin=dict(l=80, r=50, t=100, b=50),
         plot_bgcolor='white',
@@ -574,7 +693,7 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=1.04,
             xanchor="center",
             x=0.5
         )
@@ -659,7 +778,7 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
             linecolor='black',
             linewidth=1,
             exponentformat='e',
-            row=4 if Deflection is not None else 3, col=1
+            row=4,col=1
         )
     
     fig.show()
@@ -839,7 +958,30 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length):
         ),
         row=1, col=1
     )
+    # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(X_Field, Total_ShearForce)
     
+    # Add Point of Maximum Total_ShearForce
+    fig.add_trace(go.Scatter(
+        x=[max_x], y=[max_y],
+        mode='markers',
+        marker=dict(symbol='diamond', size=10, color='blue', line=dict(width=2, color='darkblue ')),
+        name='Max Shear Force',
+        hovertemplate="<b>Max SF</b><br>X: %{x:.2f} m<br>M: %{y:.2f} N<extra></extra>"
+    ), row=1, col=1)
+    
+    # Add Points of Contraflexure (if any exist)
+    if contra_x:
+        fig.add_trace(go.Scatter(
+            x=contra_x, y=[0]*len(contra_x),
+            mode='markers',
+            marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+            name='Point of Contraflexure',
+            hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} m<br>M: 0 N·m<extra></extra>"
+        ), row=1, col=1)
+
+
+
     # Add zero line for SFD
     fig.add_trace(
         go.Scatter(
@@ -886,7 +1028,27 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length):
         row=2, col=1
     )
     
-
+    # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(X_Field, Total_BendingMoment)
+    
+    # Add Point of Maximum Bending Moment
+    fig.add_trace(go.Scatter(
+        x=[max_x], y=[max_y],
+        mode='markers',
+        marker=dict(symbol='diamond', size=10, color='purple', line=dict(width=2, color='darkviolet')),
+        name='Max Bending Moment',
+        hovertemplate="<b>Max BM</b><br>X: %{x:.2f} m<br>M: %{y:.2f} N.m<extra></extra>"
+    ), row=2, col=1)
+    
+    # Add Points of Contraflexure (if any exist)
+    if contra_x:
+        fig.add_trace(go.Scatter(
+            x=contra_x, y=[0]*len(contra_x),
+            mode='markers',
+            marker=dict(symbol='circle-open', size=10, color='black', line=dict(width=2)),
+            name='Point of Contraflexure',
+            hovertemplate="<b>Contraflexure</b><br>X: %{x:.2f} m<br>M: 0 N·m<extra></extra>"
+        ), row=2, col=1)
     
     # Update layout
     fig.update_layout(
@@ -1356,8 +1518,8 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment):
     
     # Create figure with GridSpec for better control
 # Increase the figure height significantly and use GridSpec to control spacing
-    fig = plt.figure(figsize=(12, 5 * num_plots), dpi=100) # Increased height per plot
-    gs = gridspec.GridSpec(num_plots, 1, height_ratios=[1] * num_plots, hspace=0.6) # Increased hspace
+    fig = plt.figure(figsize=(12, 10), dpi=100)
+    gs = gridspec.GridSpec(2, 1, height_ratios=[1, 1], hspace=0.4)
     
     # Shear Force plot
     ax_sf = fig.add_subplot(gs[0])
@@ -1369,6 +1531,21 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment):
     ax_sf.fill_between(x_values, sf_values, 0, where=(sf_values < 0), interpolate=True, 
                        alpha=0.3, color='#ff7f0e')
     
+    # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(x_values, sf_values)
+    
+    # Mark Maximum Total_ShearForce
+    ax_sf.plot(max_x, max_y, marker='D', color='darkred', markersize=6, zorder=5, label='Max SF')
+    
+    # Mark Points of Contraflexure (if any exist)
+    if contra_x:
+        ax_sf.plot(contra_x, [0]*len(contra_x), marker='o', markerfacecolor='white', markeredgecolor='black', 
+                 markersize=6, zorder=5, label='Contraflexure')
+    
+    # Optional: Add a small legend just for these markers on the BMD
+    ax_sf.legend(loc='upper right', frameon=True, fontsize=8)
+
+
     # Reference line and styling for SF
     ax_sf.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
     ax_sf.set_title('Shear Force Diagram', fontsize=20, pad=15)
@@ -1398,7 +1575,19 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment):
                        alpha=0.3, color='#9467bd')
     ax_bm.fill_between(x_values, bm_values, 0, where=(bm_values < 0), interpolate=True, 
                        alpha=0.3, color='#2ca02c')
+    # Calculate critical structural points
+    max_x, max_y, contra_x = find_critical_points(x_values, sf_values)
     
+    # Mark Maximum Bending Moment
+    ax_bm.plot(max_x, max_y, marker='D', color='darkred', markersize=6, zorder=5, label='Max BM')
+    
+    # Mark Points of Contraflexure (if any exist)
+    if contra_x:
+        ax_bm.plot(contra_x, [0]*len(contra_x), marker='o', markerfacecolor='white', markeredgecolor='black', 
+                 markersize=6, zorder=5, label='Contraflexure')
+    
+    # Optional: Add a small legend just for these markers on the BMD
+    ax_bm.legend(loc='upper right', frameon=True, fontsize=8)
     # Reference line and styling for BM
     ax_bm.axhline(y=0, color='black', linewidth=1.5, linestyle='--')
     ax_bm.set_title('Bending Moment Diagram', fontsize=20, pad=15)
