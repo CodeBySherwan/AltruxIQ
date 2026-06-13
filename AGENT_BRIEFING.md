@@ -24,6 +24,7 @@ Results are visualised via both **Matplotlib** and **Plotly**.
 
 ---
 Architecture:
+```
 project_root/
 ├── src/
 │   ├── solver/
@@ -45,6 +46,7 @@ project_root/
 │   └── database/
 │       ├── __init__.py
 …
+```
 ## 2. File Inventory and Responsibilities
 
 | File | Role | Critical |
