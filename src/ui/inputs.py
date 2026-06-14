@@ -1,5 +1,23 @@
 ﻿import sys
 import os
+
+# =============================
+# Unit Conversion Multipliers
+# =============================
+CONVERSION_TO_SI = {
+    "Metric": {
+        "length": 1.0,
+        "force": 1.0,
+        "moment": 1.0,
+        "distributed": 1.0
+    },
+    "Imperial": {
+        "length": 0.3048,           # ft to m
+        "force": 4.4482216,         # lbf to N
+        "moment": 1.3558179,        # lbf·ft to N·m
+        "distributed": 14.5939      # lbf/ft to N/m
+    }
+}
 # --- PATH INJECTION (The Fix) ---
 # 1. Get the directory of cli.py (ui folder)
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -159,33 +177,33 @@ def Beam_Classification():
         time.sleep(1.5)
         return Beam_Classification()  # Recursively call the function for another attempt
 
-def Beam_Length():
-    """
-    Prompt the user to enter the beam length.
-    """
-    beam_length = float(input(colored("Enter Beam Length (meters): ➔ ", 'cyan')))
-    if beam_length <=0:
+def Beam_Length(unit_system="Metric", units=None):
+    """Prompt the user to enter the beam length."""
+    if units is None: units = {'length': 'm'}
+    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    
+    beam_length_raw = float(input(colored(f"Enter Beam Length ({units['length']}): ➔ ", 'cyan')))
+    if beam_length_raw <= 0:
         print_error("Beam length must be positive.")
         time.sleep(1)
-        return Beam_Length()
+        return Beam_Length(unit_system, units)
     print("")
-    return beam_length
+    return beam_length_raw * multiplier  # Return converted SI value
 
 #==============================
-def Beam_Supports():
-    """
-    Prompt the user to define the beam supports (positions and types).
+def Beam_Supports(unit_system="Metric", units=None):
+    """Prompt the user to define the beam supports."""
+    if units is None: units = {'length': 'm'}
+    multiplier = CONVERSION_TO_SI[unit_system]["length"]
     
-    Returns:
-        tuple: (A, B, A_restraint, B_restraint, A_type, B_type)
-        or (None, None, None, None, None, None) if an error occurs.
-    """
     try:
-        A = float(input(colored("Enter Position of Pin Support A (meters): ➔ ", 'cyan')))
+        A_raw = float(input(colored(f"Enter Position of Pin Support A ({units['length']}): ➔ ", 'cyan')))
+        A = A_raw * multiplier
         A_restraint = (1, 1, 0)
         A_type = "Pin Support"
     
-        B = float(input(colored("Enter Position of Roller Support B (meters): ➔ ", 'cyan')))
+        B_raw = float(input(colored(f"Enter Position of Roller Support B ({units['length']}): ➔ ", 'cyan')))
+        B = B_raw * multiplier
         B_restraint = (0, 1, 0)
         B_type = "Roller Support"
     
@@ -193,34 +211,33 @@ def Beam_Supports():
             print_error("Support positions must be positive.")
             time.sleep(1)
             print("")
-            return Beam_Supports()
+            return Beam_Supports(unit_system, units)
         if A >= B:
              print_error("Support A must be to the left of Support B.")
              print("")
              time.sleep(1)
-             return Beam_Supports()  
-             print("")
+             return Beam_Supports(unit_system, units)  
         print("")
         return A, B, A_restraint, B_restraint, A_type, B_type
     except ValueError as ve:
         print_error(f"Input error: {ve}")
         return None, None, None, None, None, None
 #==============================
-def manage_loads():
-    """
-    Display an enhanced interactive menu to manage load inputs with visual aids and 
-    engineering guidance for FEA applications.
+def manage_loads(unit_system="Metric", units=None):
+    if units is None:
+        units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
     
-    Returns:
-        dict: A dictionary with keys "pointloads", "distributedloads", 
-              "momentloads", "triangleloads" containing defined loads.
-    """
+    dist_unit = f"{units['force']}/{units['length']}"
+    
+    # Grab multipliers for conversion to SI before saving
+    l_mult = CONVERSION_TO_SI[unit_system]["length"]
+    f_mult = CONVERSION_TO_SI[unit_system]["force"]
+    m_mult = CONVERSION_TO_SI[unit_system]["moment"]
+    d_mult = CONVERSION_TO_SI[unit_system]["distributed"]
+
     loads = {
-        "pointloads": [],
-        "distributedloads": [],
-        "momentloads": [],
-        "triangleloads": []
-    }
+        "pointloads": [], "distributedloads": [], "momentloads": [], "triangleloads": []
+    }   
     
     while True:
         clear_screen()
@@ -287,8 +304,8 @@ def manage_loads():
                 print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
                 
                 print("\n")
-                pos = float(input(colored("Enter position x (m): ➔ ", 'cyan')))
-                
+                pos = float(input(colored(f"Enter position x ({units['length']}): ➔ ", 'cyan'))) * l_mult
+
                 print("\n")
                 print(colored("┌─ LOAD TYPE "+"─"*48, 'green', attrs=['bold']))
                 print(colored("│ 1 - Vertical Load (Y-direction)", 'green'))
@@ -300,14 +317,14 @@ def manage_loads():
                 load_type = input(colored("Enter your choice [1, 2, or 3] ➔ ", 'cyan'))
                 
                 if load_type == '1':
-                    y_force = float(input(colored("\nEnter Y-force (N) [positive up ↑, negative down ↓]: ➔ ", 'cyan')))
+                    y_force = float(input(colored(f"\nEnter Y-force ({units['force']}) [positive up ↑, negative down ↓]: ➔ ", 'cyan'))) * f_mult
                     loads["pointloads"].append([pos, 0, y_force])
-                    print_success(f"Added vertical point load: {y_force} N at x = {pos} m")
+                    print_success(f"Added vertical point load: {y_force/f_mult} {units['force']} at x = {pos/l_mult} {units['length']}")
                 
                 elif load_type == '2':
-                    x_force = float(input(colored("\nEnter X-force (N) [positive right →, negative left ←]: ➔ ", 'cyan')))
+                    x_force = float(input(colored(f"\nEnter X-force ({units['force']}) [positive right →, negative left ←]: ➔ ", 'cyan'))) * f_mult
                     loads["pointloads"].append([pos, x_force, 0])
-                    print_success(f"Added horizontal point load: {x_force} N at x = {pos} m")
+                    print_success(f"Added horizontal point load: {x_force/f_mult} {units['force']} at x = {pos/l_mult} {units['length']}")
                 
                 elif load_type == '3':
                     print("\n")
@@ -321,12 +338,12 @@ def manage_loads():
                     print(colored("└───" + "─"*57, 'blue', attrs=['bold']))
                     print("\n")
                     
-                    force_mag = float(input(colored("Enter Force magnitude (N): ➔ ", 'cyan')))
+                    force_mag = float(input(colored(f"Enter Force magnitude ({units['force']}): ➔ ", 'cyan'))) * f_mult
                     angle = float(input(colored("Enter angle (degrees): ➔ ", 'cyan')))
                     x_force = force_mag * np.cos(np.radians(angle))
                     y_force = force_mag * np.sin(np.radians(angle))
                     loads["pointloads"].append([pos, x_force, y_force])
-                    print_success(f"Added angled point load: {force_mag} N at {angle}° at x = {pos} m")
+                    print_success(f"Added angled point load: {force_mag/f_mult} {units['force']} at {angle}° at x = {pos/l_mult} {units['length']}")
                 
                 else:
                     print_error("Invalid point load type selection!")
@@ -367,9 +384,9 @@ def manage_loads():
                 print(colored("└───" + "─"*57, 'blue', attrs=['bold']))
                 print("\n")
                 
-                start = float(input(colored("Enter start position (m) for UDL: ➔ ", 'cyan')))
-                end = float(input(colored("Enter end position (m) for UDL: ➔ ", 'cyan')))
-                intensity = float(input(colored("Enter load intensity (N/m) [positive up ↑, negative down ↓]: ➔ ", 'cyan')))
+                start = float(input(colored(f"Enter start position ({units['length']}) for UDL: ➔ ", 'cyan'))) * l_mult
+                end = float(input(colored(f"Enter end position ({units['length']}) for UDL: ➔ ", 'cyan'))) * l_mult
+                intensity = float(input(colored(f"Enter load intensity ({dist_unit}) [positive up ↑, negative down ↓]: ➔ ", 'cyan'))) * d_mult
                 
                 # Validation
                 if start >= end:
@@ -378,7 +395,7 @@ def manage_loads():
                     continue
                 
                 loads["distributedloads"].append([start, end, intensity])
-                print_success(f"Added UDL: {intensity} N/m from x = {start} m to x = {end} m")
+                print_success(f"Added UDL: {intensity/d_mult} {dist_unit} from x = {start/l_mult} {units['length']} to x = {end/l_mult} {units['length']}")
                 time.sleep(1.5)
             
             except Exception as e:
@@ -414,11 +431,11 @@ def manage_loads():
                 print(colored("└───" + "─"*57, 'blue', attrs=['bold']))
                 print("\n")
                 
-                pos = float(input(colored("Enter position (m) for Moment Load: ➔ ", 'cyan')))
-                moment = float(input(colored("Enter moment magnitude (N·m) [positive CCW ↺, negative CW ↻]: ➔ ", 'cyan')))
+                pos = float(input(colored(f"Enter position ({units['length']}) for Moment Load: ➔ ", 'cyan'))) * l_mult
+                moment = float(input(colored(f"Enter moment magnitude ({units['moment']}) [positive CCW ↺, negative CW ↻]: ➔ ", 'cyan'))) * m_mult
                 
                 loads["momentloads"].append([pos, moment])
-                print_success(f"Added moment load: {moment} N·m at x = {pos} m")
+                print_success(f"Added moment load: {moment/m_mult} {units['moment']} at x = {pos/l_mult} {units['length']}")
                 time.sleep(1.5)
             
             except Exception as e:
@@ -455,8 +472,8 @@ def manage_loads():
                 print(colored("└───" + "─"*57, 'blue', attrs=['bold']))
                 print("\n")
                 
-                start = float(input(colored("Enter start position (m) for Triangular Load: ➔ ", 'cyan')))
-                end = float(input(colored("Enter end position (m) for Triangular Load: ➔ ", 'cyan')))
+                start = float(input(colored(f"Enter start position ({units['length']}) for Triangular Load: ➔ ", 'cyan'))) * l_mult
+                end = float(input(colored(f"Enter end position ({units['length']}) for Triangular Load: ➔ ", 'cyan'))) * l_mult
                 
                 # Validation
                 if start >= end:
@@ -464,12 +481,12 @@ def manage_loads():
                     time.sleep(2)
                     continue
                 
-                intensity = float(input(colored("Enter peak load intensity (N/m): ➔ ", 'cyan')))
-                intensityL = float(input(colored("Enter lowest load intensity (N/m): ➔ ", 'cyan')))
+                intensity = float(input(colored(f"Enter peak load intensity ({dist_unit}): ➔ ", 'cyan'))) * d_mult
+                intensityL = float(input(colored(f"Enter lowest load intensity ({dist_unit}): ➔ ", 'cyan'))) * d_mult
                 
                 loads["triangleloads"].append([start, end, intensity, intensityL])
-                print_success(f"Added triangular load from x = {start} m to x = {end} m")
-                print_success(f"Peak intensity: {intensity} N/m, Lowest intensity: {intensityL} N/m")
+                print_success(f"Added triangular load from x = {start/l_mult} {units['length']} to x = {end/l_mult} {units['length']}")
+                print_success(f"Peak intensity: {intensity/d_mult} {dist_unit}, Lowest intensity: {intensityL/d_mult} {dist_unit}")
                 time.sleep(1.5)
             
             except Exception as e:
@@ -487,11 +504,11 @@ def manage_loads():
             # Point Loads Table
             if loads['pointloads']:
                 print(colored("┌─ POINT LOADS "+"─"*47, 'yellow', attrs=['bold']))
-                print(colored("│ Position (m) | X-Force (N) | Y-Force (N)", 'yellow'))
+                print(colored(f"│ Position ({units['length']}) | X-Force ({units['force']}) | Y-Force ({units['force']})", 'yellow'))
                 print(colored("├" + "─"*61, 'yellow'))
                 for i, load in enumerate(loads['pointloads'], 1):
                     pos, x_force, y_force = load
-                    print(colored(f"│ {i:2d}) {pos:9.2f} | {x_force:10.2f} | {y_force:10.2f}", 'white'))
+                    print(colored(f"│ {i:2d}) {pos/l_mult:9.2f} | {x_force/f_mult:10.2f} | {y_force/f_mult:10.2f}", 'white'))
                 print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
                 print("")
             else:
@@ -503,11 +520,11 @@ def manage_loads():
             # Distributed Loads Table
             if loads['distributedloads']:
                 print(colored("┌─ DISTRIBUTED LOADS "+"─"*42, 'green', attrs=['bold']))
-                print(colored("│ Start (m) | End (m) | Intensity (N/m)", 'green'))
+                print(colored(f"│ Start ({units['length']}) | End ({units['length']}) | Intensity ({dist_unit})", 'green'))
                 print(colored("├" + "─"*61, 'green'))
                 for i, load in enumerate(loads['distributedloads'], 1):
-                    start, end, intensity = load
-                    print(colored(f"│ {i:2d}) {start:7.2f} | {end:6.2f} | {intensity:13.2f}", 'white'))
+                    start, end, intensity, intensityL = load
+                    print(colored(f"│ {i:2d}) {start/l_mult:7.2f} | {end/l_mult:6.2f} | {intensity/d_mult:13.2f} | {intensityL/d_mult:13.2f}", 'white'))
                 print(colored("└" + "─"*62, 'green', attrs=['bold']))
                 print("")
             else:
@@ -519,11 +536,11 @@ def manage_loads():
             # Moment Loads Table
             if loads['momentloads']:
                 print(colored("┌─ MOMENT LOADS "+"─"*46, 'magenta', attrs=['bold']))
-                print(colored("│ Position (m) | Magnitude (N·m)", 'magenta'))
+                print(colored(f"│ Position ({units['length']}) | Magnitude ({units['moment']})", 'magenta'))
                 print(colored("├" + "─"*61, 'magenta'))
                 for i, load in enumerate(loads['momentloads'], 1):
                     pos, moment = load
-                    print(colored(f"│ {i:2d}) {pos:9.2f} | {moment:15.2f} {'(CCW ↺)' if moment > 0 else '(CW ↻)'}", 'white'))
+                    print(colored(f"│ {i:2d}) {pos/l_mult:9.2f} | {moment/m_mult:15.2f} {'(CCW ↺)' if moment > 0 else '(CW ↻)'}", 'white'))
                 print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
                 print("")
             else:
@@ -535,11 +552,11 @@ def manage_loads():
             # Triangular Loads Table
             if loads['triangleloads']:
                 print(colored("┌─ TRIANGULAR LOADS "+"─"*43, 'blue', attrs=['bold']))
-                print(colored("│ Start (m) | End (m) | Peak (N/m) | Low (N/m)", 'blue'))
+                print(colored(f"│ Start ({units['length']}) | End ({units['length']}) | Peak ({dist_unit}) | Low ({dist_unit})", 'blue'))
                 print(colored("├" + "─"*61, 'blue'))
                 for i, load in enumerate(loads['triangleloads'], 1):
                     start, end, peak, low = load
-                    print(colored(f"│ {i:2d}) {start:7.2f} | {end:6.2f} | {peak:10.2f} | {low:9.2f}", 'white'))
+                    print(colored(f"│ {i:2d}) {start/l_mult:7.2f} | {end/l_mult:6.2f} | {peak/d_mult:10.2f} | {low/d_mult:9.2f}", 'white'))
                 print(colored("└" + "─"*62, 'blue', attrs=['bold']))
             else:
                 print(colored("┌─ TRIANGULAR LOADS "+"─"*43, 'blue', attrs=['bold']))
