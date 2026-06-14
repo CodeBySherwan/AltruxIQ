@@ -701,67 +701,7 @@ and the following are **new issues** found in the current code:
 
 ### 14.2 Currently present issues
 
-**ISSUE-01 — `Matplot_sfd_bmd`: `NameError: num_plots`**
-- **Severity:** High — crashes on call.
-- **Location:** `main_plotting.py`, `Matplot_sfd_bmd()`, line creating `plt.figure`.
-- **Problem:** `num_plots` is used but never defined in this function
-  (it is defined in `Matplot_combined`, not here).
-- **Fix:** Add `num_plots = 2` at the start of `Matplot_sfd_bmd`.
-
-```python
-# Add at start of function, before fig = plt.figure(...)
-num_plots = 2
-```
-
-**ISSUE-02 — `Matplot_combined`: Unconditional axis references at function end**
-- **Severity:** High — crashes when `Deflection` or `ShearStress` is `None`.
-- **Location:** `main_plotting.py`, last lines of `Matplot_combined`.
-- **Problem:** `ax_stress.tick_params(...)` and `ax_defl.tick_params(...)` are called
-  unconditionally, but these variables only exist if `ShearStress is not None` and
-  `Deflection is not None`.
-- **Fix:**
-```python
-# Replace unconditional calls with:
-ax_bm.tick_params(labelbottom=False)
-if Deflection is not None:
-    ax_defl.tick_params(labelbottom=False)
-if ShearStress is not None:
-    ax_stress.tick_params(labelbottom=False)
-```
-
-**ISSUE-03 — `Matplot_combined`: Wrong variables in subplot titles**
-- **Severity:** Medium — wrong numbers displayed, no crash.
-- **Location:** `main_plotting.py`, `Matplot_combined`, BM, Deflection, Shear titles.
-- **Problem:** All three subplots after SF use `max_V` and `min_V` (which are the shear
-  force max/min) instead of their own `max_bm / min_bm`, `max_defl / min_defl`, etc.
-- **Fix:** Use the correct local variables in each subplot's `set_title()` call.
-
-**ISSUE-04 — `Menus.py` branding inconsistency**
-- **Severity:** Low — cosmetic only, no functional impact.
-- **Location:** `Menus.py`, `main_menu_template()`.
-- **Problem:** Header still reads `ZYLO-X BEAM ANALYSIS CALCULATOR` instead of `AltruxIQ`.
-- **Fix:** Update the string literal.
-
-**ISSUE-05 — `beam_projects.json` path is CWD-relative**
-- **Severity:** Medium — data loss risk if run from wrong directory.
-- **Location:** `cli.py`, `save_projects_to_disk()` and `load_projects_from_disk()`.
-- **Problem:** Uses bare filename `'beam_projects.json'` — resolves to whatever the
-  Python process's current working directory is, not the `src/ui/` directory where
-  the file lives in source control.
-- **Fix:** Use `os.path.join(os.path.dirname(__file__), 'beam_projects.json')` to
-  anchor it to the script directory.
-
-**ISSUE-06 — `deflection_calculated` flag not set in init()**
-- **Severity:** Low — cosmetic, no crash.
-- **Location:** `cli.py`, `init()` function.
-- **Problem:** `init()` does not set `analysis_complete`, `deflection_calculated`,
-  or `stress_calculated` keys — they are only set when operations succeed. The
-  `project_state` dict at module level sets all 9 keys correctly, but `init()` only
-  sets the same 5 original keys. If `init()` is called mid-session, the post-processing
-  state keys would be lost.
-- **Fix:** Bring `init()`'s dict in sync with the module-level `project_state` dict.
-
----
+None
 
 ## 15. Missing Features and Incomplete Implementations
 
