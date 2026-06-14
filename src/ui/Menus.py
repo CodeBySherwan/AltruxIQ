@@ -349,11 +349,14 @@ def postprocessing_menu():
     print(colored("┌─ VISUALIZATION OPTIONS "+"─"*38, 'yellow', attrs=['bold']))
     
     menu_items = [
-        ("🔄 Reactions Schematic Plots", "Visualize support reaction forces"),
+        ("🔄 Reactions Schematic Plots", "Visualize support reaction forces(Plotly-only)"),
+        ("📊Shear-Force Plots", "Generate SFD diagram"),
+        ("📊 Bending-Moment Plot", "Generate BMD diagram"),
         ("📊 Shear-Force/Bending-Moment Plots", "Generate SFD and BMD diagrams"),
+        ("📈 Shear-Stress", "Display Shear stress distribution"),
+        ("📈 Bending-Stress", "Display Bending stress distribution"),
         ("📉 Deflection Plots", "Show beam displacement curves"),
-        ("📈 Shear-Stress/Bending-Stress", "Display stress distribution"),
-        ("📑 Combined Plots", "Show all diagrams together"),
+        ("📑 Combined Plots", "Show all diagrams together (Plotly Only)"),
         ("⬅️  Return to Main Menu", "Go back to the main menu")
     ]
     
@@ -365,7 +368,7 @@ def postprocessing_menu():
     
     # Get user input with improved prompt
     print("")
-    choice = input(colored("Enter your choice [1-6] ➔ ", 'cyan', attrs=['bold']))
+    choice = input(colored("Enter your choice [1-9] ➔ ", 'cyan', attrs=['bold']))
     return choice
 
 def display_profile_info(beam_length, shape, Ix, c, b, y_array):
