@@ -14,37 +14,114 @@ import plotly.graph_objs as go
 import plotting.plotting_helper as ph
 
 def plot_beam_schematic(beam_length, A, B, support_types, loads):
-    fig = make_subplots(rows=1, cols=1)
+    """
+    Create a professional, commercial-grade visualization of a simply supported beam
+    with dynamic overlap prevention for loads at the same coordinate.
+    """
+    fig = go.Figure()
 
-    # Beam line
+    # 1. Draw Beam Line
     fig.add_trace(ph.draw_beam(beam_length))
 
-    # Loads
-    for load in loads:
-        if load[0] == "point_load":
-            fig.add_trace(ph.draw_point_load(*load[1:]))
-        elif load[0] == "udl":
-            for trace in ph.draw_udl(*load[1:]):
-                fig.add_trace(trace)
-        elif load[0] == "moment":
-            for trace in ph.draw_moment(*load[1:]):
-                fig.add_trace(trace)
-    # Supports
+    # 2. Draw Supports
     fig.add_trace(ph.draw_big_support(A, support_types[0]))
     fig.add_trace(ph.draw_big_support(B, support_types[1]))
 
+    # --- Overlap Trackers ---
+    # Dictionaries to keep track of how many loads exist at specific X coordinates
+    point_load_tracker = {}
+    moment_tracker = {}
+
+    # 3. Draw Loads
+    for load in loads:
+        load_type = load[0]
+        
+        if load_type == "point_load":
+            x_val = load[1]
+            level = point_load_tracker.get(x_val, 0)
+            fig.add_trace(ph.draw_point_load(*load[1:], level=level))
+            point_load_tracker[x_val] = level + 1 # Increment for the next load
+            
+        elif load_type == "moment":
+            x_val = load[1]
+            level = moment_tracker.get(x_val, 0)
+            for trace in ph.draw_moment(*load[1:], level=level):
+                fig.add_trace(trace)
+            moment_tracker[x_val] = level + 1 # Increment for the next load
+            
+        elif load_type == "udl":
+            for trace in ph.draw_udl(*load[1:]):
+                fig.add_trace(trace)
+                
+        elif load_type == "trl":
+            for trace in draw_triangular_load(*load[1:]):
+                fig.add_trace(trace)
+
+    # 4. Professional Layout Updates
     fig.update_layout(
         width=1000,
-        height=600,
-        title=dict(text="Beam Schematic", x=0.4),
-        xaxis=dict(title="Beam Length (m)", range=[-0.5, beam_length + 0.5]),
-        yaxis=dict(title="", range=[-2, 2], showgrid=False, zeroline=False),
+        height=550,
+        title=dict(
+            text="<b>Simply Supported Beam Schematic</b>",
+            font=dict(size=22, family="Arial, sans-serif", color="#1a252f"),
+            x=0.5,
+            y=0.95,
+            xanchor='center',
+            yanchor='top'
+        ),
+        xaxis=dict(
+            title=dict(
+                text="Position along Beam (m)",
+                font=dict(size=14, family="Arial, sans-serif", color="black")
+            ),
+            range=[-0.1 * beam_length, beam_length + 0.1 * beam_length],
+            showgrid=True,
+            gridcolor="rgba(211,211,211,0.4)",
+            gridwidth=1,
+            zeroline=True,
+            zerolinecolor="black",
+            zerolinewidth=1.5,
+            tickfont=dict(size=12, color="black", family="Arial, sans-serif"),
+            mirror=True,
+            linecolor='black',
+            linewidth=1
+        ),
+        yaxis=dict(
+            title="",
+            range=[-2.5, 2.5], # Increased vertical space for stacked loads and arcs
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False, 
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         hovermode="closest",
-        plot_bgcolor="rgba(173,216,230,0.3)"  # Light blue background
+        margin=dict(l=50, r=50, t=100, b=80),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(0,0,0,0.2)",
+            borderwidth=1,
+            font=dict(size=12, family="Arial, sans-serif")
+        )
     )
+
+    # Add visual dimension line text for beam length
+    fig.add_annotation(
+        x=beam_length / 2,
+        y=-1.8, # Moved much further down so it never clashes with bottom traces
+        text=f"Total Length = {beam_length} m",
+        showarrow=False,
+        font=dict(size=14, family="Arial, sans-serif", color="#555555")
+    )
+
     fig.show()
 
-
+    
 def plot_reaction_diagram(A, B, reactions,support_types):
     Va, Vb, Ha = reactions
     fig = make_subplots(rows=1, cols=1)
