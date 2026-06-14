@@ -36,15 +36,27 @@ from solver.stress_solver import (calculate_beam_deflection,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen)
+                 postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads,Beam_Classification
-
+from ui.units import default_units
 # -----------------------------
 # Global Storage Variables
 # -----------------------------
+current_unit_system = "Metric"
+# Define our label dictionaries to pass to the menus
+METRIC_LABELS = {
+    'length': 'm', 'length_small': 'mm', 'force': 'N', 'moment': 'N·m',
+    'inertia': 'm⁴', 'sec_mod': 'm³', 'modulus': 'GPa', 'density': 'kg/m³', 'stress': 'MPa'
+}
+IMPERIAL_LABELS = {
+    'length': 'ft', 'length_small': 'in', 'force': 'lbf', 'moment': 'lbf·ft',
+    'inertia': 'in⁴', 'sec_mod': 'in³', 'modulus': 'ksi', 'density': 'lb/ft³', 'stress': 'ksi'
+}
+current_labels = METRIC_LABELS  # <-- Tracks active dictionary
 beam_storage = []      # List to hold all saved projects
 current_project = None # Dictionary holding the currently loaded project
 Materials = None       # Placeholder for the materials database object
+current_unit_system = 'SI'  # Units System
 beam_length = 0.0
 A = 0.0
 B = 0.0
@@ -87,11 +99,12 @@ project_state = {
 # =============================
 def New_Project():
     """Start a new project by resetting the current project."""
-    global current_project, project_state, beam_type, support_types
+    global current_project, project_state, beam_type, support_types, current_unit_system, current_labels
     current_project = None  # Reset current project data
     beam_type = None        # BUG-05 FIX: reset beam_type so menu guards work correctly
     support_types = ("pin", "roller")  # BUG-10 FIX: reset to safe default
-    
+    current_unit_system = "Metric"        # <-- RESET UNITS
+    current_labels = METRIC_LABELS
     # Reset project state flags
     project_state = {
         "is_loaded": False,
@@ -130,7 +143,7 @@ def load_project():
     global Ix, shape, c, b, y_array, section_dims, project_state
     global elastic_modulus, selected_material, density, yield_strength, ultimate_strength, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads
-    global beam_type, support_types  # BUG-10 FIX: support_types must be a global
+    global beam_type, support_types , current_unit_system 
     
     load_projects_from_disk()
 
@@ -185,6 +198,15 @@ def load_project():
         
 
         # Apply loaded project data to current state
+        current_unit_system = current_project.get('unit_system', 'Metric')
+        # Update the active dictionary based on loaded save
+        global current_labels
+        if current_unit_system == "Imperial":
+            current_labels = IMPERIAL_LABELS
+        else:
+            current_labels = METRIC_LABELS
+            
+        beam_length = current_project.get('beam_length', 0)
         beam_length = current_project.get('beam_length', 0)
         A = current_project.get('support_A_pos', 0)
         B = current_project.get('support_B_pos', 0)
@@ -420,6 +442,7 @@ def save_project():
     # Create project data dictionary
     project_data = {
         'name': project_name,
+        'unit_system': current_unit_system,
         'beam_type': beam_type,
         'beam_length': beam_length,
         'support_A_pos': A,
@@ -714,6 +737,7 @@ def check_unsaved_changes():
 
 # =============================
 def run_extended_menu():
+    global current_unit_system, current_labels
     global current_project, project_state
     global beam_length, A, B, A_restraint, B_restraint, A_type, B_type
     global Ix, shape, c, b, y_array, section_dims
@@ -795,7 +819,7 @@ def run_extended_menu():
 
         elif selection == '3':  # Profile Definition
             while True:
-                sub_choice = profile_definition_menu()
+                sub_choice = profile_definition_menu(units=current_labels)
                 if sub_choice == '4':  # Back to main menu
                     break
                 elif sub_choice == '1':  # Define beam length
@@ -804,11 +828,12 @@ def run_extended_menu():
                         if confirmation.lower() != 'y':
                             continue
                             
-                    beam_length = Beam_Length()
+                    beam_length = Beam_Length(current_unit_system, current_labels)
                     project_state["has_unsaved_changes"] = True
                     print("")
                     cprint("==========================================================", 'red')
-                    cprint(f"Beam Length is set to: {beam_length} m",'white')
+                    len_div = 0.3048 if current_unit_system == "Imperial" else 1.0
+                    cprint(f"Beam Length is set to: {beam_length / len_div:.3f} {current_labels['length']}",'white')
                     cprint("==========================================================", 'red')
                     time.sleep(1)
                     
@@ -870,7 +895,7 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
                         
-                    display_profile_info(beam_length, shape, Ix, c, b, y_array)
+                    display_profile_info(beam_length, shape, Ix, c, b, y_array,units=current_labels)
 
         elif selection == '4':  # Material Selection
             while True:
@@ -934,7 +959,7 @@ def run_extended_menu():
                             if confirmation.lower() != 'y':
                                 continue
                             
-                        A, B, A_restraint, B_restraint, A_type, B_type = Beam_Supports()
+                        A, B, A_restraint, B_restraint, A_type, B_type = Beam_Supports(current_unit_system, current_labels)
                         project_state["supports_saved"] = True
                         project_state["has_unsaved_changes"] = True
                         support_types = ("pin", "roller")
@@ -943,9 +968,9 @@ def run_extended_menu():
                         cprint("==========================================================", 'red')
                         cprint("                Selected Support Positions                                 ", 'light_yellow')
                         cprint("==========================================================", 'red')
-                        print(f"Pin Support Position(A): {A} m")
-                        print("")
-                        print(f"Roller Support Position(B): {B} m")
+# Apply the same `len_div` math to the print statements for A and B.
+                        print(f"Pin Support Position(A): {A / len_div:.3f} {current_labels['length']}")
+                        print(f"Roller Support Position(B): {B / len_div:.3f} {current_labels['length']}")
                         cprint("==========================================================", 'red')
                         print("")                        
                         input("Press Enter to return to the menu...")
@@ -988,7 +1013,7 @@ def run_extended_menu():
                                 continue
                     
                         print("Define Loads:")
-                        loads_dict = manage_loads()
+                        loads_dict = manage_loads(current_unit_system, current_labels)
                         pointloads = loads_dict.get("pointloads", [])
                         distributedloads = loads_dict.get("distributedloads", [])
                         momentloads = loads_dict.get("momentloads", [])
@@ -1100,8 +1125,9 @@ def run_extended_menu():
                             B=B,
                             A_type=A_type,
                             B_type=B_type,
-                            loads=loads
-                        )
+                            loads=loads,
+                            units=current_labels)
+                        
         
                         # Perform the analysis with proper arguments
                         if beam_type == "Simple":
@@ -1198,7 +1224,8 @@ def run_extended_menu():
                             max_shear=max_shear,
                             min_shear=min_shear,
                             max_bending=max_bending,
-                            min_bending=min_bending
+                            min_bending=min_bending,
+                            units=current_labels
                         )
         
                     except Exception as e:
@@ -1249,7 +1276,8 @@ def run_extended_menu():
                             Ix=Ix,
                             Deflection=Deflection,
                             Slope=Slope,
-                            curv=curv
+                            curv=curv,
+                            units=current_labels
                         )
         
                     except Exception as e:
@@ -1317,7 +1345,8 @@ def run_extended_menu():
                             Max_Shear_stress=Max_Shear_stress,
                             bending_stress=bending_stress,
                             Max_bending_stress=Max_bending_stress,
-                            FOS=FOS
+                            FOS=FOS,
+                            units=current_labels
                         )
         
                     except Exception as e:
@@ -1561,6 +1590,31 @@ def run_extended_menu():
                 print_error(f"Error generating recommendations: {e}")
                 time.sleep(2)
                 continue  
+
+        elif selection == '12':  # Unit System
+            current_unit_system = "Metric"
+            while True:
+                choice = unit_system_menu(current_unit_system)
+                if choice == '1':
+                    current_unit_system = "Metric"
+                    current_labels = METRIC_LABELS
+                    project_state["has_unsaved_changes"] = True
+                    print_success("Unit system changed to Metric (SI).")
+                    time.sleep(1.5)
+                    break
+                elif choice == '2':
+                    current_unit_system = "Imperial"
+                    current_labels = IMPERIAL_LABELS
+                    project_state["has_unsaved_changes"] = True
+                    print_success("Unit system changed to US Customary (Imperial).")
+                    time.sleep(1.5)
+                    break
+                elif choice == '3':
+                    break
+                else:
+                    print_error("Invalid selection!")
+                    time.sleep(1)
+ 
     
         else:
             print_error("Invalid selection! Please try again.")
@@ -1569,8 +1623,9 @@ def run_extended_menu():
 display_engineering_recommendations
 
 def init():
-    global project_state
-
+    global project_state, current_unit_system, current_labels
+    current_unit_system = "Metric"
+    current_labels = METRIC_LABELS
     project_state = {
         "is_loaded": False,
         "profile_saved": False, 
