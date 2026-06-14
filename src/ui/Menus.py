@@ -1,10 +1,64 @@
-﻿import os
+import os
 import time
 from termcolor import colored, cprint
 import numpy as np
 # =============================
+# Global Unit Configurations
+# =============================
+METRIC_UNITS = {
+    'length': 'm',
+    'length_small': 'mm',
+    'force': 'N',
+    'moment': 'N·m',
+    'inertia': 'm⁴',
+    'sec_mod': 'm³',
+    'modulus': 'GPa',
+    'density': 'kg/m³',
+    'stress': 'MPa'
+}
+
+IMPERIAL_UNITS = {
+    'length': 'ft',
+    'length_small': 'in',
+    'force': 'lbf',
+    'moment': 'lbf·ft',
+    'inertia': 'in⁴',
+    'sec_mod': 'in³',
+    'modulus': 'ksi',
+    'density': 'lb/ft³',
+    'stress': 'ksi'
+}
+# =============================
 # Utility & Helper Functions
 # =============================
+def get_divisor(units_dict, quantity):
+    """Returns the divisor to convert base SI (m, N, Pa, kg) to the target display unit."""
+    is_imperial = units_dict.get('length') == 'ft'
+    
+    if quantity == 'length': return 0.3048 if is_imperial else 1.0
+    if quantity == 'length_small': return 0.0254 if is_imperial else 0.001  # m -> in OR m -> mm
+    if quantity == 'force': return 4.4482216 if is_imperial else 1.0
+    if quantity == 'moment': return 1.3558179 if is_imperial else 1.0
+    if quantity == 'inertia': return (0.3048)**4 if is_imperial else 1.0
+    if quantity == 'sec_mod': return (0.3048)**3 if is_imperial else 1.0
+    if quantity == 'modulus': return 6894757.29 if is_imperial else 1e9     # Pa -> ksi OR Pa -> GPa
+    if quantity == 'stress': return 6894757.29 if is_imperial else 1e6      # Pa -> ksi OR Pa -> MPa
+    if quantity == 'density': return 16.01846 if is_imperial else 1.0       # kg/m³ -> lb/ft³ OR keep kg/m³
+    
+    return 1.0
+def get_inverse_multiplier(units_dict, quantity):
+    """Returns the divisor needed to convert SI back to the current unit system."""
+    # If the current label for length is 'ft', we know we are in Imperial
+    if units_dict.get('length') == 'ft':
+        multipliers = {
+            'length': 0.3048, 
+            'force': 4.4482216, 
+            'moment': 1.3558179,
+            'inertia': (0.3048)**4  # Example: m^4 to ft^4
+        }
+        return multipliers.get(quantity, 1.0)
+    return 1.0 # Metric is already 1.0
+
 def clear_screen():
     """Clear the terminal screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -60,7 +114,8 @@ def main_menu_template():
         ("🔬 Analysis/Simulation", "Calculate beam response and results"),
         ("📈 Postprocessing/Visualization", "View detailed plots and diagrams"),
         ("💾 Save Project", "Save your current project to disk"),
-        ("📋 Recommendations", "Get engineering recommendations and optimizations")
+        ("📋 Recommendations", "Get engineering recommendations and optimizations"),
+        ("⚙️  Unit System", "Switch between Metric (SI) and US Customary units")
     ]
     
     for idx, (title, description) in enumerate(menu_items, 1):
@@ -79,7 +134,7 @@ def main_menu_template():
     
     # Get user input with improved prompt
     print("")
-    selection = input(colored("Enter your selection [0-11] ➔ ", 'cyan', attrs=['bold']))
+    selection = input(colored("Enter your selection [0-12] ➔ ", 'cyan', attrs=['bold']))
     return selection
 
 # =============================
@@ -128,7 +183,7 @@ def project_management_menu():
 # =============================
 # Profile Definition Functions
 # =============================
-def profile_definition_menu():
+def profile_definition_menu(units=METRIC_UNITS):
     """Display an enhanced profile definition menu and return the user's choice."""
     clear_screen()
     
@@ -143,7 +198,7 @@ def profile_definition_menu():
     print(colored("┌─ OPTIONS "+"─"*52, 'yellow', attrs=['bold']))
     
     menu_items = [
-        ("📏 Enter Beam Length (m)", "Define the total length of the beam"),
+        (f"📏 Enter Beam Length ({units['length']})", "Define the total length of the beam"),
         ("📊 Define Profile", "Select cross-section type and dimensions"),
         ("👁️  View Current Profile", "Display the currently defined profile properties"),
         ("⬅️  Return to Main Menu", "Go back to the main menu")
@@ -371,7 +426,7 @@ def postprocessing_menu():
     choice = input(colored("Enter your choice [1-9] ➔ ", 'cyan', attrs=['bold']))
     return choice
 
-def display_profile_info(beam_length, shape, Ix, c, b, y_array):
+def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNITS):
     """
     Display enhanced profile information in a visually appealing format.
     
@@ -391,7 +446,9 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array):
         Array of y-coordinates for stress calculations
     """
     clear_screen()
-    
+    # Grab the divisors
+    len_div = get_inverse_multiplier(units, 'length')
+    inertia_div = get_inverse_multiplier(units, 'inertia')   
     # Create decorative header
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
@@ -459,7 +516,7 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array):
     # Display beam information
     print("\n")
     print(colored("┌─ BEAM INFORMATION "+"─"*42, 'green', attrs=['bold']))
-    print(colored(f"│ Beam Length: {beam_length:.4f} m", 'green'))
+    print(colored(f"│ Beam Length: {(beam_length / len_div):.4f} {units['length']}", 'green'))
     print(colored("└" + "─"*62, 'green', attrs=['bold']))
     
     # Display profile properties
@@ -472,10 +529,9 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array):
     else:
         ix_str = f"{Ix:.6f}"
     
-    print(colored(f"│ Moment of Inertia (Ix): {ix_str} m⁴", 'magenta'))
-    print(colored(f"│ Distance to Extreme Fiber (c): {c:.4f} m", 'magenta'))
-    print(colored(f"│ Representative Width (b): {b:.4f} m", 'magenta'))
-    print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
+    print(colored(f"│ Moment of Inertia (Ix): {(Ix / inertia_div):.6e} {units['inertia']}", 'magenta'))
+    print(colored(f"│ Distance to Extreme Fiber (c): {(c / len_div):.4f} {units['length']}", 'magenta'))
+    print(colored(f"│ Representative Width (b): {(b / len_div):.4f} {units['length']}", 'magenta'))
     
     # Display calculated parameters
     print("\n")
@@ -500,10 +556,10 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array):
     
     if A > 0:
         radius_gyration = np.sqrt(Ix / A)
-        print(colored(f"│ Section Modulus (Ix/c): {sm_str} m³", 'blue'))
-        print(colored(f"│ Radius of Gyration: {radius_gyration:.4f} m", 'blue'))
+        print(colored(f"│ Section Modulus (Ix/c): {sm_str} {units['sec_mod']}", 'blue'))
+        print(colored(f"│ Radius of Gyration: {radius_gyration:.4f} {units['length']}", 'blue'))
     else:
-        print(colored(f"│ Section Modulus (Ix/c): {sm_str} m³", 'blue'))
+        print(colored(f"│ Section Modulus (Ix/c): {sm_str} {units['sec_mod']}", 'blue'))
     
     print(colored(f"│ Stress Calculation Points: {len(y_array)} points", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
@@ -535,7 +591,7 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array):
 
 
 def display_analysis_info(beam_type, beam_length, shape, selected_material, 
-                         A=None, B=None, A_type=None, B_type=None, loads=None):
+                         A=None, B=None, A_type=None, B_type=None, loads=None, units=METRIC_UNITS):
     """
     Display enhanced analysis information in a professional FEA-like format.
     
@@ -557,7 +613,11 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
         Dictionary containing defined loads
     """
     clear_screen()
-    
+ # Fetch divisors
+    len_div = get_divisor(units, 'length')
+    mod_div = get_divisor(units, 'modulus')
+    stress_div = get_divisor(units, 'stress')
+    dens_div = get_divisor(units, 'density')   
     # Count loads
     point_load_count = len(loads.get("pointloads", [])) if loads else 0
     distributed_load_count = len(loads.get("distributedloads", [])) if loads else 0
@@ -592,7 +652,7 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     print(colored("│", 'green'))
     print(colored("│ Analysis Type:", 'green') + colored(" Static Linear Elastic", 'white'))
     print(colored("│ Beam Type:", 'green') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Beam Length:", 'green') + colored(f" {beam_length:.3f} m", 'white'))
+    print(colored("│ Beam Length:", 'green') + colored(f" {beam_length / len_div:.3f} {units['length']}", 'white'))
     print(colored("│ Profile Type:", 'green') + colored(f" {shape}", 'white'))
     print(colored("│", 'green'))
     print(colored("└" + "─"*62, 'green', attrs=['bold']))
@@ -606,14 +666,15 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     
     # Display only if material properties are available
     if selected_material:
-        print(colored("│ Young's Modulus (E):", 'magenta') + 
-              colored(f" {selected_material.get('Elastic Modulus', 0):.1f} GPa", 'white'))
-        print(colored("│ Poisson's Ratio (ν):", 'magenta') + 
-              colored(f" {selected_material.get('Poisson Ratio', 0):.2f}", 'white'))
-        print(colored("│ Density:", 'magenta') + 
-              colored(f" {selected_material.get('Density', 0):.1f} kg/m³", 'white'))
-        print(colored("│ Yield Strength:", 'magenta') + 
-              colored(f" {selected_material.get('Yield Strength', 0):.1f} MPa", 'white'))
+        # Convert raw JSON DB values to base SI internally before displaying
+        raw_E_Pa = selected_material.get('Elastic Modulus', 0) * 1e9
+        raw_Y_Pa = selected_material.get('Yield Strength', 0) * 1e6
+        raw_Dens = selected_material.get('Density', 0)
+
+        print(colored("│ Young's Modulus (E):", 'magenta') + colored(f" {raw_E_Pa / mod_div:.1f} {units['modulus']}", 'white'))
+        print(colored("│ Poisson's Ratio (ν):", 'magenta') + colored(f" {selected_material.get('Poisson Ratio', 0):.2f}", 'white'))
+        print(colored("│ Density:", 'magenta') + colored(f" {raw_Dens / dens_div:.1f} {units['density']}", 'white'))
+        print(colored("│ Yield Strength:", 'magenta') + colored(f" {raw_Y_Pa / stress_div:.1f} {units['stress']}", 'white'))
     
     print(colored("│", 'magenta'))
     print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
@@ -625,12 +686,12 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     
     if beam_type == "Simple":
         print(colored("│ Support Type:", 'blue') + colored(" Simply Supported Beam", 'white'))
-        print(colored("│ Left Support:", 'blue') + colored(f" {A_type} at x = {A:.3f} m", 'white'))
-        print(colored("│ Right Support:", 'blue') + colored(f" {B_type} at x = {B:.3f} m", 'white'))
+        print(colored("│ Left Support:", 'blue') + colored(f" {A_type} at x = {A / len_div:.3f} {units['length']}", 'white'))
+        print(colored("│ Right Support:", 'blue') + colored(f" {B_type} at x = {B / len_div:.3f} {units['length']}", 'white'))
     elif beam_type == "Cantilever":
         print(colored("│ Support Type:", 'blue') + colored(" Cantilever Beam", 'white'))
-        print(colored("│ Fixed End:", 'blue') + colored(" at x = 0.000 m", 'white'))
-        print(colored("│ Free End:", 'blue') + colored(f" at x = {beam_length:.3f} m", 'white'))
+        print(colored("│ Fixed End:", 'blue') + colored(f" at x = 0.000 {units['length']}", 'white'))
+        print(colored("│ Free End:", 'blue') + colored(f" at x = {beam_length / len_div:.3f} {units['length']}", 'white'))
     
     print(colored("│", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
@@ -676,7 +737,7 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
 def display_analysis_results(beam_type, shape, beam_length, A=None, B=None, 
                            Va=None, Ha=None, Vb=None, Ma=None, 
                            max_shear=None, min_shear=None, 
-                           max_bending=None, min_bending=None):
+                           max_bending=None, min_bending=None, units=METRIC_UNITS):
     """
     Display analysis results in a professional FEA-like format.
     
@@ -698,7 +759,9 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
         Maximum and minimum bending moment values
     """
     clear_screen()
-    
+    len_div = get_divisor(units, 'length')
+    force_div = get_divisor(units, 'force')
+    mom_div = get_divisor(units, 'moment')
     # Create decorative header
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
@@ -711,7 +774,7 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
     print(colored("│", 'blue'))
     print(colored("│ Analysis Type:", 'blue') + colored(" Static Linear Elastic", 'white'))
     print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length:.3f} m", 'white'))
+    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length / len_div:.3f} {units['length']}", 'white'))
     print(colored("│ Profile Type:", 'blue') + colored(f" {shape}", 'white'))
     print(colored("│ Solution Status:", 'blue') + colored(" COMPLETED ✓", 'green', attrs=['bold']))
     print(colored("│", 'blue'))
@@ -726,21 +789,22 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
         print(colored("│ Support Configuration:", 'green') + colored(" Pin-Roller", 'white'))
         print(colored("│", 'green'))
         print(colored("│ Left Support (Pin):", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(f" {A:.3f} m", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va:.3f} N", 'white'))
-        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha:.3f} N", 'white'))
+        print(colored("│  • Position:", 'green') + colored(f" {A / len_div:.3f} {units['length']}", 'white'))
+        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va / force_div:.3f} {units['force']}", 'white'))
+        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha / force_div:.3f} {units['force']}", 'white'))
         print(colored("│", 'green'))
         print(colored("│ Right Support (Roller):", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(f" {B:.3f} m", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Vb:.3f} N", 'white'))
+        print(colored("│  • Position:", 'green') + colored(f" {B / len_div:.3f} {units['length']}", 'white'))
+        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Vb / force_div:.3f} {units['force']}", 'white'))
+
     elif beam_type == "Cantilever":
         print(colored("│ Support Configuration:", 'green') + colored(" Fixed-Free", 'white'))
         print(colored("│", 'green'))
         print(colored("│ Fixed Support:", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(" 0.000 m", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va:.3f} N", 'white'))
-        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha:.3f} N", 'white'))
-        print(colored("│  • Moment Reaction:", 'green') + colored(f" {Ma:.3f} N·m", 'white'))
+        print(colored("│  • Position:", 'green') + colored(f" 0.000 {units['length']}", 'white'))
+        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va / force_div:.3f} {units['force']}", 'white'))
+        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha / force_div:.3f} {units['force']}", 'white'))
+        print(colored("│  • Moment Reaction:", 'green') + colored(f" {Ma / mom_div:.3f} {units['moment']}", 'white'))
     
     print(colored("│", 'green'))
     print(colored("└" + "─"*62, 'green', attrs=['bold']))
@@ -751,8 +815,8 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
     print("\n")
     print(colored("┌─ EQUILIBRIUM VERIFICATION "+"─"*36, 'yellow', attrs=['bold']))
     print(colored("│", 'yellow'))
-    print(colored("│ Sum of Vertical Forces:", 'yellow') + colored(f" {v_sum:.3f} N", 'white'))
-    print(colored("│ Sum of Horizontal Forces:", 'yellow') + colored(f" {h_sum:.3f} N", 'white'))
+    print(colored("│ Sum of Vertical Forces:", 'yellow') + colored(f" {v_sum/force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
+    print(colored("│ Sum of Horizontal Forces:", 'yellow') + colored(f" {h_sum/force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
     
     if abs(v_sum) < 0.001 and abs(h_sum) < 0.001:
         print(colored("│ Equilibrium Check:", 'yellow') + colored(" PASSED ✓", 'green', attrs=['bold']))
@@ -771,17 +835,17 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
     # Shear force
     abs_max_shear = max(abs(max_shear), abs(min_shear))
     print(colored("│ SHEAR FORCE", 'magenta', attrs=['bold']))
-    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_shear:.3f} N", 'white'))
-    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_shear:.3f} N", 'white'))
-    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_shear:.3f} N", 'white'))
+    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
+    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
+    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
     print(colored("│", 'magenta'))
     
     # Bending moment
     abs_max_moment = max(abs(max_bending), abs(min_bending))
     print(colored("│ BENDING MOMENT", 'magenta', attrs=['bold']))
-    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_bending:.3f} N·m", 'white'))
-    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_bending:.3f} N·m", 'white'))
-    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_moment:.3f} N·m", 'white'))
+    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_bending / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
+    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_bending / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
+    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_moment / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
     
     print(colored("│", 'magenta'))
     print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
@@ -810,7 +874,7 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
 
 
 
-def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, Ix, Deflection, Slope, curv):
+def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, Ix, Deflection, Slope, curv, units=METRIC_UNITS): # <-- Added units
     """
     Display deflection analysis results in a professional FEA-like format.
     
@@ -867,10 +931,10 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     print(colored("│ Integration Technique:", 'blue') + colored(" Numerical Integration (Trapezoidal)", 'white'))
     print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
     print(colored("│ Profile Type:", 'blue') + colored(f" {shape}", 'white'))
-    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length:.3f} m", 'white'))
-    print(colored("│ Elastic Modulus (E):", 'blue') + colored(f" {elastic_modulus/1e9:.1f} GPa", 'white'))
-    print(colored("│ Moment of Inertia (I):", 'blue') + colored(f" {Ix:.6e} m⁴", 'white'))
-    print(colored("│ Flexural Rigidity (EI):", 'blue') + colored(f" {elastic_modulus*Ix:.2e} N·m²", 'white'))
+    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length:.3f} {units['length']}", 'white')) # <-- CHANGED
+    print(colored("│ Elastic Modulus (E):", 'blue') + colored(f" {elastic_modulus/1e9:.1f} {units['modulus']}", 'white')) # <-- CHANGED
+    print(colored("│ Moment of Inertia (I):", 'blue') + colored(f" {Ix:.6e} {units['inertia']}", 'white')) # <-- CHANGED
+    print(colored("│ Flexural Rigidity (EI):", 'blue') + colored(f" {elastic_modulus*Ix:.2e} {units['force']}·{units['length']}²", 'white')) # <-- CHANGED
     print(colored("│", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     
@@ -882,16 +946,16 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     # Format max deflection with appropriate units
     max_defl_abs = abs(max_defl)
     if max_defl_abs < 1e-3:
-        max_defl_str = f"{max_defl*1000:.4f} mm" 
-        deflection_unit = "mm"
+        max_defl_str = f"{max_defl*1000:.4f} {units['length_small']}" # <-- CHANGED
+        deflection_unit = units['length_small'] # <-- CHANGED
         scaling_factor = 1000
     else:
-        max_defl_str = f"{max_defl:.6f} m"
-        deflection_unit = "m"
+        max_defl_str = f"{max_defl:.6f} {units['length']}" # <-- CHANGED
+        deflection_unit = units['length'] # <-- CHANGED
         scaling_factor = 1
     
     print(colored("│ Maximum Deflection:", 'green') + colored(f" {max_defl_str} {'↑' if max_defl > 0 else '↓'}", 'white'))
-    print(colored("│ Location of Maximum:", 'green') + colored(f" x = {max_defl_pos:.3f} m", 'white'))
+    print(colored("│ Location of Maximum:", 'green') + colored(f" x = {max_defl_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│ Deflection-to-Span Ratio:", 'green') + colored(f" 1:{(1/span_ratio):.0f}", 'white'))
     
     # Add deflection limit check (common engineering limit is L/360 for live loads)
@@ -915,10 +979,10 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     print(colored("┌─ ADDITIONAL DEFORMATION PARAMETERS "+"─"*27, 'magenta', attrs=['bold']))
     print(colored("│", 'magenta'))
     print(colored("│ Maximum Slope:", 'magenta') + colored(f" {max_slope:.6f} rad ({np.degrees(max_slope):.2f}°)", 'white'))
-    print(colored("│ Location of Max Slope:", 'magenta') + colored(f" x = {max_slope_pos:.3f} m", 'white'))
+    print(colored("│ Location of Max Slope:", 'magenta') + colored(f" x = {max_slope_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│", 'magenta'))
-    print(colored("│ Maximum Curvature:", 'magenta') + colored(f" {max_curv:.6e} 1/m", 'white'))
-    print(colored("│ Location of Max Curvature:", 'magenta') + colored(f" x = {max_curv_pos:.3f} m", 'white'))
+    print(colored("│ Maximum Curvature:", 'magenta') + colored(f" {max_curv:.6e} 1/{units['length']}", 'white')) # <-- CHANGED
+    print(colored("│ Location of Max Curvature:", 'magenta') + colored(f" x = {max_curv_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│", 'magenta'))
     print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
     
@@ -974,7 +1038,7 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
 def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b, 
                           y_array, Total_ShearForce, Total_BendingMoment, 
                           Shear_stress, Max_Shear_stress, bending_stress, 
-                          Max_bending_stress, FOS):
+                          Max_bending_stress, FOS, units=METRIC_UNITS):
     """
     Display stress analysis results in a professional FEA-like format.
     
@@ -1010,7 +1074,10 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
         Factor of safety against yielding
     """
     clear_screen()
-    
+    len_div = get_divisor(units, 'length')
+    stress_div = get_divisor(units, 'stress')
+    sec_mod_div = get_divisor(units, 'sec_mod')
+    inertia_div = get_divisor(units, 'inertia')  
     # Calculate yield strength and other material properties
     yield_strength = selected_material.get('Yield Strength', 0) * 1e6  # Convert MPa to Pa
     poisson_ratio = selected_material.get('Poisson Ratio', 0.3)
@@ -1044,9 +1111,9 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
     print(colored("│ Cross-Section:", 'blue') + colored(f" {shape}", 'white'))
     print(colored("│ Material:", 'blue') + colored(f" {selected_material.get('Material', 'Unknown')}", 'white'))
-    print(colored("│ Yield Strength:", 'blue') + colored(f" {yield_strength/1e6:.2f} MPa", 'white'))
-    print(colored("│ Section Modulus:", 'blue') + colored(f" {section_modulus:.6e} m³", 'white'))
-    print(colored("│ Moment of Inertia:", 'blue') + colored(f" {Ix:.6e} m⁴", 'white'))
+    print(colored("│ Yield Strength:", 'blue') + colored(f" {yield_strength / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
+    print(colored("│ Section Modulus:", 'blue') + colored(f" {section_modulus / sec_mod_div:.6e} {units['sec_mod']}", 'white')) # <-- CHANGED
+    print(colored("│ Moment of Inertia:", 'blue') + colored(f" {Ix / inertia_div:.6e} {units['inertia']}", 'white')) # <-- CHANGED
     print(colored("│", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     
@@ -1058,27 +1125,27 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     # Bending stress
     print(colored("│ BENDING STRESS (Normal Stress)", 'green', attrs=['bold']))
     print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {Max_bending_stress/1e6:.2f} MPa", 'white'))
+          colored(f" {Max_bending_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
     print(colored("│  • Location:", 'green') + 
-          colored(f" x = {max_bm_loc:.3f} m", 'white'))
+          colored(f" x = {max_bm_loc / len_div:.3f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│  • Extreme Fiber Distance:", 'green') + 
-          colored(f" {c:.4f} m", 'white'))
+          colored(f" {c / len_div:.4f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│", 'green'))
     
     # Shear stress
     print(colored("│ SHEAR STRESS", 'green', attrs=['bold']))
     print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {Max_Shear_stress/1e6:.2f} MPa", 'white'))
+          colored(f" {Max_Shear_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
     print(colored("│  • Location:", 'green') + 
-          colored(f" x = {max_sf_loc:.3f} m", 'white'))
+          colored(f" x = {max_sf_loc / len_div:.3f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│  • Representative Width:", 'green') + 
-          colored(f" {b:.4f} m", 'white'))
+          colored(f" {b / len_div:.4f} {units['length']}", 'white')) # <-- CHANGED
     print(colored("│", 'green'))
     
     # Combined stress
     print(colored("│ COMBINED STRESS (von Mises)", 'green', attrs=['bold']))
     print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {von_mises_stress/1e6:.2f} MPa", 'white'))
+          colored(f" {von_mises_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
     print(colored("│  • Percentage of Yield:", 'green') + 
           colored(f" {(von_mises_stress/yield_strength)*100:.1f}%", 'white'))
     print(colored("│", 'green'))
@@ -1091,7 +1158,7 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     print(colored("│ Factor of Safety (FOS):", 'magenta') + 
           colored(f" {FOS:.2f}", 'white', attrs=['bold']))
     print(colored("│ Allowable Stress:", 'magenta') + 
-          colored(f" {allowable_stress/1e6:.2f} MPa", 'white'))
+          colored(f" {allowable_stress / stress_div:.2f} {units['stress']}", 'white'))
     print(colored("│", 'magenta'))
     
     # FOS interpretation
@@ -1413,3 +1480,28 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     
     print("\n")
     input(colored("Press Enter to return to the main menu...", 'cyan', attrs=['bold']))
+# =============================
+#  UNIT SYSTEM SELECTION 
+# ============================
+def unit_system_menu(current_system="Metric"):
+    """Display the unit configuration options and return choice."""
+    clear_screen()
+    print("\n")
+    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+    print(colored("║                    UNIT SYSTEM SELECTION                     ║", 'cyan', attrs=['bold']))
+    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    print("\n")
+    
+    print(colored("┌─ OPTIONS "+"─"*52, 'yellow', attrs=['bold']))
+    print(colored("│ 1  │ 🌍 Metric System (SI)", 'yellow') + colored(" - Meters, Newtons, MPa, GPa", 'white'))
+    print(colored("│ 2  │ 🦅 US Customary / Imperial", 'yellow') + colored(" - Feet/Inches, lbf, ksi", 'white'))
+    print(colored("│ 3  │ ⬅️  Return to Main Menu", 'yellow') + colored(" - Keep current configuration", 'white'))
+    print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
+    
+    print("\n" + colored("┌─ ACTIVE SYSTEM ", 'green') + colored("─"*46, 'green', attrs=['bold']))
+    print(colored(f"│ Current Setting: {current_system}", 'green'))
+    print(colored("└───" + "─"*53, 'green', attrs=['bold']))
+    
+    print("")
+    choice = input(colored("Select your unit system [1-3] ➔ ", 'cyan', attrs=['bold']))
+    return choice
