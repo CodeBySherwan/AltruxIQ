@@ -1327,7 +1327,7 @@ def run_extended_menu():
         elif selection == '9':  # Postprocessing/Visualization
             while True:
                 sub_choice = postprocessing_menu()
-                if sub_choice == '6':  # Back to main menu
+                if sub_choice == '9':  # Back to main menu
                     break
                     
                 # Check if analysis has been completed before allowing visualization
@@ -1345,50 +1345,99 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
                         
-                elif sub_choice == '2':  # SFD/BMD (Matplotlib)
+                elif sub_choice == '2':  # SFD 
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Shear Force Plot (Matplotlib):")
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'SFD')
+                        elif style == '2':
+                                print_success("Processing Shear Force Plot Plot(Plotly):")
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'SFD')
+                        
+                    except Exception as e:
+                        print_error(f"Error in Plotting !!! : {e}")
+                        time.sleep(2)
+                        continue
+
+                elif sub_choice == '3':  # BMD 
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Bending Moment Plot (Matplotlib):")
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'BMD')
+                        elif style == '2':
+                                print_success("Processing Bending Moment Plot Plot(Plotly):")
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'BMD')
+ 
+                    except Exception as e:
+                        print_error(f"Error in Plotting !!! : {e}")
+                        time.sleep(2)
+                        continue
+
+                elif sub_choice == '4':  # SFD/BMD Combined in one plot 
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Force/Bending Moment Plots (Matplotlib):")
-                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment)
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'Both')
                         elif style == '2':
-                                print_success("Processing Shear Force/Bending Moment Plots (Plotly):")
-                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length)
-                        
+                                print_success("Processing Shear Force/Bending Moment Plots(Plotly):")
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'Both')
+
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")
                         time.sleep(2)
                         continue
-                        
-                elif sub_choice == '5':  # Combined plots
+
+                elif sub_choice == '5':  # Shear Stress
+                  
+                    if not project_state.get("stress_calculated", False):
+                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
+                        time.sleep(2)
+                        continue
                     try:
-                        # BUG-07 FIX: only pass arrays that have actually been computed
-                        defl_data = Deflection if project_state.get("deflection_calculated", False) else None
-                        shear_data = Shear_stress if project_state.get("stress_calculated", False) else None
-
-                        if defl_data is None:
-                            print(colored("  ℹ  Deflection not yet calculated — will be omitted from combined plot.", 'yellow'))
-                        if shear_data is None:
-                            print(colored("  ℹ  Shear stress not yet calculated — will be omitted from combined plot.", 'yellow'))
-
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
-                            print_success("Processing Combined Plots (Matplotlib):")
-                            Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment, Deflection=defl_data, ShearStress=shear_data)
+                            print_success("Processing Shear Stress Plot (Matplotlib):")
+                            Matplot_ShearStress(X_Field, Shear_stress)
+
                         elif style == '2':
-                            print_success("Processing Combined Plots (Plotly):")
-                            Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data)
+                            print_success("Processing Shear Stress Plot(Plotly):")
+                            Plotly_ShearStress(X_Field, Shear_stress, beam_length)
+                            
                         else:
                             print_error("Invalid style selection!")
                             time.sleep(2)
                             continue
-
                     except Exception as e:
-                        print_error(f"Error in Plotting !!! : {e}")
+                        print_error(f"Error plotting shear-Stress Plot: {e}")
+                        time.sleep(2)
+
+                elif sub_choice == '6':  # Bending Stress contours
+                
+                    if not project_state.get("stress_calculated", False):
+                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
                         time.sleep(2)
                         continue
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Bending Stress Plots (Matplotlib):")
+                            Matplot_BendingStress(X_Field, bending_stress)
+                        elif style == '2':
+                            print_success("Processing shear/Bending Plots (Plotly):")
+                            Plotly_BendingStress(X_Field, bending_stress, beam_length)
+                        else:
+                            print_error("Invalid style selection!")
+                            time.sleep(2)
+                            continue
+                    except Exception as e:
+                        print_error(f"Error plotting shear-Stress Plot: {e}")
+                        time.sleep(2)
 
-                elif sub_choice == '3':  # Deflection plot
+
+                elif sub_choice == '7':  # Deflection plot
                     if not project_state.get("deflection_calculated", False):
                         print_error("Please calculate deflection first (in Analysis menu)!")
                         time.sleep(2)
@@ -1411,29 +1460,29 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '4':  # Stress contours
-                    # BUG-07 FIX: guard against accessing Shear_stress/bending_stress before computed
-                    if not project_state.get("stress_calculated", False):
-                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
+                elif sub_choice == '8':  # Combined plots
+                    try:
+                 
+                        defl_data = Deflection if project_state.get("deflection_calculated", False) else None
+                        shear_data = Shear_stress if project_state.get("stress_calculated", False) else None
+
+                        if defl_data is None:
+                            print(colored("  ℹ  Deflection not yet calculated — will be omitted from combined plot.", 'yellow'))
+                        if shear_data is None:
+                            print(colored("  ℹ  Shear stress not yet calculated — will be omitted from combined plot.", 'yellow'))
+
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+
+                        print_success("Processing Combined Plots (Plotly Only):")
+                        Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data)
+
+                    except Exception as e:
+                        print_error(f"Error in Plotting !!! : {e}")
                         time.sleep(2)
                         continue
-                    try:
-                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
-                        if style == '1':
-                            print_success("Processing shear/Bending Stress Plots (Matplotlib):")
-                            Matplot_ShearStress(X_Field, Shear_stress)
-                            Matplot_BendingStress(X_Field, bending_stress)
-                        elif style == '2':
-                            print_success("Processing shear/Bending Plots (Plotly):")
-                            Plotly_ShearStress(X_Field, Shear_stress, beam_length)
-                            Plotly_BendingStress(X_Field, bending_stress, beam_length)
-                        else:
-                            print_error("Invalid style selection!")
-                            time.sleep(2)
-                            continue
-                    except Exception as e:
-                        print_error(f"Error plotting shear-Stress Plot: {e}")
-                        time.sleep(2)
+
+
+
 
         elif selection == '10':  # Save Project
             if not project_state["profile_saved"] or not project_state["material_saved"] or \
