@@ -1,4 +1,4 @@
-﻿# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 #  Moment of Inertia (MOI) Solver — Improved
 #  Returns 6-tuple: (Ix, shape_name, c, b_rep, y_array, section_dims)
 #
@@ -9,7 +9,24 @@
 import numpy as np
 # pyrefly: ignore [missing-import]
 from termcolor import cprint, colored
-
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+def get_moi_scale(units_dict):
+    """
+    Returns (len_div, i_div, len_unit, i_unit) to dynamically scale 
+    cross-sectional properties for display purposes.
+    """
+    if units_dict is None:
+        # Default fallback to Metric (SI) if no units dict is provided
+        return 1.0, 1.0, "m", "m⁴"
+    
+    is_imperial = units_dict.get('length') == 'ft'
+    if is_imperial:
+        # Cross-section dimensions are conventionally shown in inches (in) and in⁴ for Imperial
+        return 0.0254, (0.0254)**4, "in", "in⁴"
+    else:
+        # Default behavior for Metric (meters and m⁴)
+        return 1.0, 1.0, "m", "m⁴"
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
@@ -36,7 +53,7 @@ def print_result(title, value, unit, precision=6, color='green'):
     print(colored("└" + "─"*62, color, attrs=['bold']))
     print("")
 
-def print_derived_properties(Ix, c, A):
+def print_derived_properties(Ix, c, A,units=None):
     """Print derived engineering properties: Se, rg (exact for all sections)."""
     Se   = Ix / c                   # Elastic section modulus (m³)
     r_g  = np.sqrt(Ix / A)          # Radius of gyration (m)
@@ -113,7 +130,7 @@ def _validate_positive(**kwargs):
 # Profile Functions  (all return 6-tuple)
 # ---------------------------------------------------------------------------
 
-def inertia_moment_ibeam():
+def inertia_moment_ibeam(units=None):
     """
     I-Beam (doubly-symmetric).
 
@@ -158,27 +175,29 @@ def inertia_moment_ibeam():
     Ix_total   = 2.0 * I_flange + I_web
     y_array    = np.linspace(-c, c, 10001)
 
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
     # Display
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c)", c, "m", precision=4, color='yellow')
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Total Height  H = 2tf + hw:        {H:.4f} m", 'blue'))
-    print(colored(f"│ Flange width  bf:                  {bf:.4f} m", 'blue'))
-    print(colored(f"│ Flange thickness tf:               {tf:.4f} m", 'blue'))
-    print(colored(f"│ Web height    hw:                  {hw:.4f} m", 'blue'))
-    print(colored(f"│ Web thickness tw:                  {tw:.4f} m", 'blue'))
+    print(colored(f"│ Total Height  H = 2tf + hw:        {H / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Flange width  bf:                  {bf / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Flange thickness tf:               {tf / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Web height    hw:                  {hw / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Web thickness tw:                  {tw / len_div:.4f} {len_unit}", 'blue'))
     print(colored(f"│ Flange-to-web width ratio bf/tw:   {bf/tw:.2f}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {'type': 'I-beam', 'bf': bf, 'tf': tf, 'hw': hw, 'tw': tw, 'H': H}
     return Ix_total, "I-beam", c, tw, y_array, section_dims
 
 
-def inertia_moment_tbeam():
+def inertia_moment_tbeam(units=None):
     """
     T-Beam (singly-symmetric, flange at top).
 
@@ -241,32 +260,40 @@ def inertia_moment_tbeam():
     Se_top = Ix_total / c_top
     Se_bot = Ix_total / c_bot
 
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    # derived unit
+    a_div = (0.3048)**2 if units and units.get('length') == 'ft' else 1.0
+    sm_div = (0.0254)**3 if units and units.get('length') == 'ft' else 1.0
+    a_unit = "ft²" if units and units.get('length') == 'ft' else "m²"
+    sm_unit = "in³" if units and units.get('length') == 'ft' else "m³"
+
     # Display
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
 
     print(colored("┌─ NEUTRAL AXIS & SECTION GEOMETRY " + "─"*28, 'yellow', attrs=['bold']))
-    print(colored(f"│ Centroid from bottom of section:   {y_bar:.4f} m", 'yellow'))
-    print(colored(f"│ Centroid from top of section:      {H - y_bar:.4f} m", 'yellow'))
-    print(colored(f"│ Distance NA→extreme bottom (c_bot):{c_bot:.4f} m", 'yellow'))
-    print(colored(f"│ Distance NA→extreme top   (c_top): {c_top:.4f} m", 'yellow'))
-    print(colored(f"│ Design c (governing):              {c:.4f} m", 'yellow'))
+    print(colored(f"│ Centroid from bottom of section:   {y_bar / len_div:.4f} {len_unit}", 'yellow'))
+    print(colored(f"│ Centroid from top of section:      {(H - y_bar) / len_div:.4f} {len_unit}", 'yellow'))
+    print(colored(f"│ Distance NA→extreme bottom (c_bot):{c_bot / len_div:.4f} {len_unit}", 'yellow'))
+    print(colored(f"│ Distance NA→extreme top   (c_top): {c_top / len_div:.4f} {len_unit}", 'yellow'))
+    print(colored(f"│ Design c (governing):              {c / len_div:.4f} {len_unit}", 'yellow'))
     print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
     print("")
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Total Height  H = tf + hw:         {H:.4f} m", 'blue'))
-    print(colored(f"│ Flange width  bf:                  {bf:.4f} m", 'blue'))
-    print(colored(f"│ Flange thickness tf:               {tf:.4f} m", 'blue'))
-    print(colored(f"│ Web height    hw:                  {hw:.4f} m", 'blue'))
-    print(colored(f"│ Web thickness tw:                  {tw:.4f} m", 'blue'))
+    print(colored(f"│ Total Height  H = tf + hw:         {H / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Flange width  bf:                  {bf / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Flange thickness tf:               {tf / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Web height    hw:                  {hw / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Web thickness tw:                  {tw / len_div:.4f} {len_unit}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
     print(colored("┌─ DERIVED ENGINEERING PROPERTIES " + "─"*29, 'magenta', attrs=['bold']))
-    print(colored(f"│ Cross-sectional Area (A):          {A_total:.6e} m²", 'magenta'))
-    print(colored(f"│ Section Modulus top  (Se=Ix/c_top):{Se_top:.6e} m³", 'magenta'))
-    print(colored(f"│ Section Modulus bot  (Se=Ix/c_bot):{Se_bot:.6e} m³", 'magenta'))
-    print(colored(f"│ Radius of Gyration (r=√(Ix/A)):    {np.sqrt(Ix_total/A_total):.6e} m", 'magenta'))
+    print(colored(f"│ Cross-sectional Area (A):          {A_total / a_div:.6e} {a_unit}", 'magenta'))
+    print(colored(f"│ Section Modulus top  (Se=Ix/c_top):{Se_top / sm_div:.6e} {sm_unit}", 'magenta'))
+    print(colored(f"│ Section Modulus bot  (Se=Ix/c_bot):{Se_bot / sm_div:.6e} {sm_unit}", 'magenta'))
+    print(colored(f"│ Radius of Gyration (r=√(Ix/A)):    {np.sqrt(Ix_total/A_total) / len_div:.6e} {len_unit}", 'magenta'))
     print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
     print("")
 
@@ -279,7 +306,7 @@ def inertia_moment_tbeam():
     return Ix_total, "T-beam", c, tw, y_array, section_dims
 
 
-def inertia_moment_circle():
+def inertia_moment_circle(units=None):
     """
     Solid circular cross-section.
 
@@ -313,22 +340,24 @@ def inertia_moment_circle():
     A        = np.pi * r**2
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = r)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = r)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Diameter d:                        {diameter:.4f} m", 'blue'))
-    print(colored(f"│ Radius  r:                         {r:.4f} m", 'blue'))
+    print(colored(f"│ Diameter d:                        {diameter / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Radius  r:                         {r / len_div:.4f} {len_unit}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {'type': 'Circle', 'diameter': diameter, 'radius': r}
     return Ix_total, "Circle", c, diameter, y_array, section_dims
 
 
-def inertia_moment_hollow_circle():
+def inertia_moment_hollow_circle(units=None):
     """
     Hollow circular (annular) cross-section.
 
@@ -367,18 +396,20 @@ def inertia_moment_hollow_circle():
     A        = np.pi * (r_o**2 - r_i**2)
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = r_o)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = r_o)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Outer diameter D_o:                {outer_diameter:.4f} m", 'blue'))
-    print(colored(f"│ Inner diameter D_i:                {inner_diameter:.4f} m", 'blue'))
-    print(colored(f"│ Wall thickness t = (D_o-D_i)/2:    {t_wall:.4f} m", 'blue'))
+    print(colored(f"│ Outer diameter D_o:                {outer_diameter / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Inner diameter D_i:                {inner_diameter / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Wall thickness t = (D_o-D_i)/2:    {t_wall / len_div:.4f} {len_unit}", 'blue'))
     print(colored(f"│ Diameter ratio D_i/D_o:            {inner_diameter/outer_diameter:.4f}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {
         'type': 'Hollow Circle',
@@ -388,7 +419,7 @@ def inertia_moment_hollow_circle():
     return Ix_total, "Hollow Circle", c, outer_diameter, y_array, section_dims
 
 
-def inertia_moment_rectangle():
+def inertia_moment_rectangle(units=None):
     """
     Solid rectangular cross-section.
 
@@ -422,23 +453,25 @@ def inertia_moment_rectangle():
     A        = b * h
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = h/2)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = h/2)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Width  b:                          {b:.4f} m", 'blue'))
-    print(colored(f"│ Height h:                          {h:.4f} m", 'blue'))
+    print(colored(f"│ Width  b:                          {b / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Height h:                          {h / len_div:.4f} {len_unit}", 'blue'))
     print(colored(f"│ Aspect ratio h/b:                  {h/b:.2f}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {'type': 'Rectangle', 'width': b, 'height': h}
     return Ix_total, "Rectangle", c, b, y_array, section_dims
 
 
-def inertia_moment_square():
+def inertia_moment_square(units=None):
     """
     Solid square cross-section.
 
@@ -471,22 +504,24 @@ def inertia_moment_square():
     A        = a**2
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = a/2)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = a/2)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Side length a:                     {a:.4f} m", 'blue'))
-    print(colored(f"│ Diagonal length a√2:               {a*1.4142:.4f} m", 'blue'))
+    print(colored(f"│ Side length a:                     {a / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Diagonal length a√2:               {a*1.4142 / len_div:.4f} {len_unit}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {'type': 'Square', 'side': a}
     return Ix_total, "Square", c, a, y_array, section_dims
 
 
-def inertia_moment_hollow_square():
+def inertia_moment_hollow_square(units=None):
     """
     Hollow square cross-section (square tube).
 
@@ -523,18 +558,20 @@ def inertia_moment_hollow_square():
     A        = outer_width**2 - inner_width**2
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = B/2)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = B/2)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Outer side length B:               {outer_width:.4f} m", 'blue'))
-    print(colored(f"│ Inner side length b:               {inner_width:.4f} m", 'blue'))
-    print(colored(f"│ Wall thickness t = (B-b)/2:        {t_wall:.4f} m", 'blue'))
+    print(colored(f"│ Outer side length B:               {outer_width / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Inner side length b:               {inner_width / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Wall thickness t = (B-b)/2:        {t_wall / len_div:.4f} {len_unit}", 'blue'))
     print(colored(f"│ Side ratio b/B:                    {inner_width/outer_width:.4f}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {
         'type': 'Hollow Square',
@@ -543,7 +580,7 @@ def inertia_moment_hollow_square():
     return Ix_total, "Hollow Square", c, outer_width, y_array, section_dims
 
 
-def inertia_moment_hollow_rectangle():
+def inertia_moment_hollow_rectangle(units=None):
     """
     Hollow rectangular cross-section (rectangular tube).
 
@@ -587,20 +624,22 @@ def inertia_moment_hollow_rectangle():
     A        = outer_b * outer_h - inner_b * inner_h
     y_array  = np.linspace(-c, c, 10001)
 
-    print_result("MOMENT OF INERTIA", Ix_total, "m⁴", precision=6, color='green')
-    print_result("NEUTRAL AXIS DISTANCE (c = H/2)", c, "m", precision=4, color='yellow')
+    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+
+    print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
+    print_result("NEUTRAL AXIS DISTANCE (c = H/2)", c / len_div, len_unit, precision=4, color='yellow')
 
     print(colored("┌─ CROSS-SECTION PARAMETERS " + "─"*35, 'blue', attrs=['bold']))
-    print(colored(f"│ Outer width  B:                    {outer_b:.4f} m", 'blue'))
-    print(colored(f"│ Outer height H:                    {outer_h:.4f} m", 'blue'))
-    print(colored(f"│ Inner width  b:                    {inner_b:.4f} m", 'blue'))
-    print(colored(f"│ Inner height h:                    {inner_h:.4f} m", 'blue'))
-    print(colored(f"│ Top/bottom wall thickness t_f:     {t_flange:.4f} m", 'blue'))
-    print(colored(f"│ Side wall thickness t_w:           {t_web:.4f} m", 'blue'))
+    print(colored(f"│ Outer width  B:                    {outer_b / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Outer height H:                    {outer_h / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Inner width  b:                    {inner_b / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Inner height h:                    {inner_h / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Top/bottom wall thickness t_f:     {t_flange / len_div:.4f} {len_unit}", 'blue'))
+    print(colored(f"│ Side wall thickness t_w:           {t_web / len_div:.4f} {len_unit}", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     print("")
 
-    print_derived_properties(Ix_total, c, A)
+    print_derived_properties(Ix_total, c, A, units)
 
     section_dims = {
         'type': 'Hollow Rectangle',

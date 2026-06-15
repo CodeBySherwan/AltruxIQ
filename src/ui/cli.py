@@ -16,6 +16,7 @@ import time
 # pyrefly: ignore [missing-import]
 from termcolor import colored, cprint
 # --- PATH INJECTION (The Fix) ---
+
 # 1. Get the directory of cli.py (ui folder)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # 2. Get the parent directory (src folder)
@@ -23,6 +24,8 @@ src_dir = os.path.dirname(current_dir)
 # 3. Add the src folder to Python's search path if it's not already there
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
+
+    
 # Application modules
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
 from solver.main_solver import solve_simple_beam,solve_cantilever_beam
@@ -36,9 +39,9 @@ from solver.stress_solver import (calculate_beam_deflection,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu)
+                 postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads,Beam_Classification
-from ui.units import default_units
+
 # -----------------------------
 # Global Storage Variables
 # -----------------------------
@@ -533,22 +536,19 @@ def load_material_database():
         time.sleep(3)
 
 # =============================
-def select_material():
+def select_material(unit_system="Metric", units=None):
     """
-    List all materials from the loaded database in an enhanced visual format,
-    prompt for a selection, and return key properties of the selected material.
-    
-    Returns:
-        dict: Selected material properties or None if input is invalid.
+    List all materials from the loaded database, convert them to the active unit system,
+    prompt for a selection, and return key properties.
     """
     global Materials, project_state
+    if units is None: units = METRIC_LABELS
     if Materials is None:
         print_error("Materials database is not loaded!")
         return None
 
     materials_list = Materials.materials
     
-    # Create a decorative header
     clear_screen()
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
@@ -556,39 +556,51 @@ def select_material():
     print(colored("╚══════════════════════════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     print("\n")
     
-    # Header for materials table
+    # Grab divisors for dynamic UI conversion
+    dens_div = get_divisor(units, 'density')
+    stress_div = get_divisor(units, 'stress')
+    mod_div = get_divisor(units, 'modulus')
+
+    # Dynamic Table Header based on unit system
     header = colored("  # │ Material", 'yellow', attrs=['bold']) + " " * 24 + colored("│ Density │ Yield Str │ Ult Str │ E-Modulus │ Poisson │ Thermal Exp", 'yellow', attrs=['bold'])
     separator = colored("────┼────────────────────────────────────┼─────────┼───────────┼─────────┼───────────┼─────────┼─────────────", 'yellow')
-    units =    colored("    │                                    │ kg/m³   │ MPa       │ MPa     │ GPa       │         │ 10⁻⁶/°C", 'white')
     
+    # Dynamic Units Row
+    units_str = f"    │                                    │ {units['density']:<7} │ {units['stress']:<9} │ {units['stress']:<7} │ {units['modulus']:<9} │         │ 10⁻⁶/°C"
     print(header)
     print(separator)
-    print(units)
+    print(colored(units_str, 'white'))
     print(separator)
     
-    # Print each material with properties in a table format
+    # Print each material with dynamically converted properties
     for index, material in enumerate(materials_list):
-        # Material number and name
         mat_num = colored(f"{index + 1:3d} │", 'light_yellow')
         mat_name = colored(f" {material['Material']:<34} │", 'light_yellow')
         
-        # Properties with appropriate formatting
-        density = f" {material.get('Density', 'N/A'):<7d} │"
-        yield_str = f" {material.get('Yield Strength', 'N/A'):<9d} │"
-        ult_str = f" {material.get('Ultimate Strength', 'N/A'):<7d} │"
-        e_mod = f" {material.get('Elastic Modulus', 'N/A'):<9d} │"
-        poisson = f" {material.get('Poisson Ratio', 'N/A'):<7.2f} │"
+        # 1. Pull raw JSON metric data
+        # 2. Multiply to get Base SI (Pa, kg/m³)
+        # 3. Divide by divisor to get active display unit (ksi, MPa, etc.)
+        disp_dens = material.get('Density', 0) / dens_div
+        disp_yield = (material.get('Yield Strength', 0) * 1e6) / stress_div
+        disp_ult = (material.get('Ultimate Strength', 0) * 1e6) / stress_div
+        disp_mod = (material.get('Elastic Modulus', 0) * 1e9) / mod_div
+        poisson = material.get('Poisson Ratio', 0)
+        therm_exp = material.get('Thermal Expansion', 0)
         
-        # New property - Thermal Expansion
-        therm_exp = f" {material.get('Thermal Expansion', 'N/A'):.1e}" if 'Thermal Expansion' in material else " N/A      "
+        # Formatting the columns
+        density_col = f" {int(disp_dens):<7d} │"
+        yield_col = f" {int(disp_yield):<9d} │"
+        ult_col = f" {int(disp_ult):<7d} │"
+        mod_col = f" {int(disp_mod):<9d} │"
+        poisson_col = f" {poisson:<7.2f} │"
+        therm_col = f" {therm_exp:.1e}" if therm_exp else " N/A      "
         
-        # Combine all parts of the row
-        print(f"{mat_num}{mat_name}{density}{yield_str}{ult_str}{e_mod}{poisson}{therm_exp}")
+        print(f"{mat_num}{mat_name}{density_col}{yield_col}{ult_col}{mod_col}{poisson_col}{therm_col}")
     
     print(separator)
     print("\n")
     
-    # Material descriptions section
+        # Material descriptions section
     print(colored("┌─ MATERIAL DESCRIPTIONS "+"─"*40, 'green', attrs=['bold']))
     for index, material in enumerate(materials_list):
         if 'Description' in material:
@@ -607,12 +619,10 @@ def select_material():
         selected_material = materials_list[idx]
         print_success(f"You selected: {selected_material['Material']}")
         
-        # Mark material as changed
         project_state["material_saved"] = True
         project_state["has_unsaved_changes"] = True
         
-        # Return key properties including the new ones
-        key_props = {
+        return {
             "Material": selected_material.get("Material"),
             "Density": selected_material.get("Density"),
             "Yield Strength": selected_material.get("Yield Strength"),
@@ -622,86 +632,69 @@ def select_material():
             "Thermal Expansion": selected_material.get("Thermal Expansion", 0),
             "Description": selected_material.get("Description", "")
         }
-        return key_props
     except ValueError:
         print_error("Invalid input. Please enter a valid number.")
         return None
 
 # =============================
-def display_material_info(selected_material, density, yield_strength, ultimate_strength, elastic_modulus, poisson_ratio, shear_yield_strength):
+def display_material_info(selected_material, density, yield_strength, ultimate_strength, elastic_modulus, poisson_ratio, shear_yield_strength, unit_system, units):
     """
-    Display enhanced material information in a visually appealing format.
-    
-    Parameters:
-    -----------
-    selected_material : dict
-        Dictionary containing material properties
-    density, yield_strength, etc. : float
-        Converted material properties in SI units
+    Display enhanced material information dynamically adjusting to the active unit system.
     """
     clear_screen()
     
-    # Create decorative header
+    dens_div = get_divisor(units, 'density')
+    stress_div = get_divisor(units, 'stress')
+    mod_div = get_divisor(units, 'modulus')
+
     print("\n")
     print(colored("╔═════════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
     print(colored("║                  MATERIAL PROPERTIES                            ║", 'cyan', attrs=['bold']))
     print(colored("╚═════════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     
-    # Material name and description
     print("\n")
     material_name = selected_material['Material']
     description = selected_material.get('Description', 'No description available')
     
-    # Display material name with decoration
     print(colored("┌─ MATERIAL: ", 'yellow', attrs=['bold']) + colored(f"{material_name}", 'yellow', attrs=['bold']) + colored(" " + "─"*(50 - len(material_name)), 'yellow', attrs=['bold']))
     print(colored("│ ", 'yellow') + colored(f"{description}", 'white'))
     print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
     
-    # Properties section with decorative box
     print("\n")
-    print(colored("┌─ STANDARD UNITS "+"─"*45, 'green', attrs=['bold']))
+    print(colored(f"┌─ ACTIVE UNITS ({unit_system.upper()}) " + "─"*(44 - len(unit_system)), 'green', attrs=['bold']))
     
-    # Create a table for properties in standard units
-    properties_std = [
-        ("Density", f"{selected_material['Density']} kg/m³"),
-        ("Yield Strength", f"{selected_material['Yield Strength']} MPa"),
-        ("Ultimate Strength", f"{selected_material['Ultimate Strength']} MPa"),
-        ("Elastic Modulus", f"{selected_material['Elastic Modulus']} GPa"),
-        ("Poisson Ratio", f"{selected_material['Poisson Ratio']}"),
+    # Calculate display values directly from the Base SI variables you passed in
+    properties_active = [
+        ("Density", f"{density / dens_div:.1f} {units['density']}"),
+        ("Yield Strength", f"{yield_strength / stress_div:.1f} {units['stress']}"),
+        ("Ultimate Strength", f"{ultimate_strength / stress_div:.1f} {units['stress']}"),
+        ("Elastic Modulus", f"{elastic_modulus / mod_div:.1f} {units['modulus']}"),
+        ("Poisson Ratio", f"{poisson_ratio}"),
         ("Thermal Expansion", f"{selected_material.get('Thermal Expansion', 'N/A'):.1e} /°C" if 'Thermal Expansion' in selected_material else "N/A")
     ]
     
-    # Display properties in standard units
-    for prop, value in properties_std:
+    for prop, value in properties_active:
         print(colored(f"│ {prop:<20}: ", 'green') + colored(f"{value}", 'white'))
     
     print(colored("└" + "─"*62, 'green', attrs=['bold']))
     
-    # SI Units section with converted values
     print("\n")
-    print(colored("┌─ SI UNITS (FOR CALCULATIONS) "+"─"*34, 'blue', attrs=['bold']))
+    print(colored("┌─ INTERNAL SOLVER ENGINE (BASE SI) " + "─"*26, 'blue', attrs=['bold']))
     
-    # Create a table for properties in SI units
     properties_si = [
         ("Density", f"{density} kg/m³"),
         ("Yield Strength", f"{yield_strength:.2e} Pa"),
         ("Ultimate Strength", f"{ultimate_strength:.2e} Pa"),
         ("Elastic Modulus", f"{elastic_modulus:.2e} Pa"),
-        ("Poisson Ratio", f"{poisson_ratio}"),
         ("Shear Modulus*", f"{elastic_modulus/(2*(1+poisson_ratio)):.2e} Pa"),
         ("Shear Yield Strength*", f"{shear_yield_strength:.2e} Pa")
     ]
     
-    # Display properties in SI units
     for prop, value in properties_si:
         print(colored(f"│ {prop:<20}: ", 'blue') + colored(f"{value}", 'white'))
     
-    print(colored("│ ", 'blue') + colored("* Calculated values", 'white', attrs=['dark']))
+    print(colored("│ ", 'blue') + colored("* Calculated parameters", 'white', attrs=['dark']))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
-    
-    # Application information section
-    print("\n")
-    print(colored("┌─ TYPICAL APPLICATIONS "+"─"*41, 'magenta', attrs=['bold']))
     
     # Get typical applications based on material type
     applications = "No application information available."
@@ -855,21 +848,21 @@ def run_extended_menu():
                         print("")
                         
                     if profile_choice == '1':
-                        result = moi_solver.inertia_moment_ibeam()
+                        result = moi_solver.inertia_moment_ibeam(units=current_labels)
                     elif profile_choice == '2':
-                        result = moi_solver.inertia_moment_tbeam()
+                        result = moi_solver.inertia_moment_tbeam(units=current_labels)
                     elif profile_choice == '3':
-                        result = moi_solver.inertia_moment_circle()
+                        result = moi_solver.inertia_moment_circle(units=current_labels)
                     elif profile_choice == '4':
-                        result = moi_solver.inertia_moment_hollow_circle()
+                        result = moi_solver.inertia_moment_hollow_circle(units=current_labels)
                     elif profile_choice == '5':
-                        result = moi_solver.inertia_moment_square()
+                        result = moi_solver.inertia_moment_square(units=current_labels)
                     elif profile_choice == '6':
-                        result = moi_solver.inertia_moment_hollow_square()
+                        result = moi_solver.inertia_moment_hollow_square(units=current_labels)
                     elif profile_choice == '7':
-                        result = moi_solver.inertia_moment_rectangle()
+                        result = moi_solver.inertia_moment_rectangle(units=current_labels)
                     elif profile_choice == '8':
-                        result = moi_solver.inertia_moment_hollow_rectangle()
+                        result = moi_solver.inertia_moment_hollow_rectangle(units=current_labels)
                     else:
                         print_error("Invalid choice! Please try again.")
                         continue
@@ -905,10 +898,14 @@ def run_extended_menu():
                 elif sub_choice == '1':  # Select material
                     if project_state["is_loaded"] and project_state["material_saved"]:
                         confirmation = input(colored("Project already has a material defined. Modify? (Y/N): ", 'cyan'))
-                        if confirmation.lower() != 'y':
-                            continue
-                            
-                    selected_material = select_material()
+                        try:
+                            if confirmation.lower() != 'y':
+                                continue
+                        except ValueError:
+                                print_error("Invalid input. Please select a valid option.")
+                                time.sleep(2)
+                                continue    
+                    selected_material = select_material(current_unit_system, current_labels)
                     if selected_material:
                         density = float(selected_material["Density"])
                         yield_strength = float(selected_material["Yield Strength"]) * 1e6
@@ -937,7 +934,9 @@ def run_extended_menu():
                         ultimate_strength, 
                         elastic_modulus, 
                         poisson_ratio, 
-                        shear_yield_strength
+                        shear_yield_strength,
+                        current_unit_system,
+                        current_labels
                     )
 
 
@@ -1061,9 +1060,9 @@ def run_extended_menu():
                             formatted_loads = format_loads_for_plotting(loads_dict)
                             if beam_type=="Simple":
                                 formatted_loads = format_loads_for_plotting(loads_dict)
-                                plot_beam_schematic(beam_length, A, B, support_types, formatted_loads)
+                                plot_beam_schematic(beam_length, A, B, support_types, formatted_loads,units=current_labels)
                             elif beam_type=="Cantilever":
-                                 fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis")
+                                 fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis",units=current_labels)
                                  fig.show()
                         except Exception as e:
                             print_error(f"Error plotting beam schematic: {e}")
@@ -1085,9 +1084,9 @@ def run_extended_menu():
                 try:
                     formatted_loads = format_loads_for_plotting(loads)
                     if beam_type=="Simple":
-                        plot_beam_schematic(beam_length, A, B, support_types, formatted_loads)
+                        plot_beam_schematic(beam_length, A, B, support_types, formatted_loads,units=current_labels)
                     elif beam_type=="Cantilever":
-                         fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis")
+                         fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis",units=current_labels)
                          fig.show()
                 except Exception as e:
                     print_error(f"Error plotting beam schematic: {e}")

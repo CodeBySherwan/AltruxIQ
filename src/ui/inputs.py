@@ -1,6 +1,8 @@
 ﻿import sys
 import os
-
+from termcolor import colored
+import time
+import numpy as np
 # =============================
 # Unit Conversion Multipliers
 # =============================
@@ -27,9 +29,6 @@ src_dir = os.path.dirname(current_dir)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-from termcolor import colored
-import time
-import numpy as np
 from ui.Menus import print_error, print_success, print_title, print_option, clear_screen
 
 #  Beam Classification Setup
@@ -523,7 +522,7 @@ def manage_loads(unit_system="Metric", units=None):
                 print(colored(f"│ Start ({units['length']}) | End ({units['length']}) | Intensity ({dist_unit})", 'green'))
                 print(colored("├" + "─"*61, 'green'))
                 for i, load in enumerate(loads['distributedloads'], 1):
-                    start, end, intensity, intensityL = load
+                    start, end, intensity = load
                     print(colored(f"│ {i:2d}) {start/l_mult:7.2f} | {end/l_mult:6.2f} | {intensity/d_mult:13.2f} | {intensityL/d_mult:13.2f}", 'white'))
                 print(colored("└" + "─"*62, 'green', attrs=['bold']))
                 print("")
