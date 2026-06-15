@@ -49,17 +49,14 @@ def draw_big_support(x, support_type):
             name="Roller Support",  # Legend entry for roller support
             showlegend=True
         )
-
-
-
-def draw_point_load(x, magnitude, level=0):
+def draw_point_load(x, magnitude, level=0,unit="N"):
     """
     Draws a point load arrow. 
     Positive loads (upward) are drawn above the beam.
     Negative loads (downward) are drawn under the beam in red.
     They stack vertically end-to-end if multiple exist at the same x.
     """
-    arrow_length = 1.0  # Defines how long the arrow body is
+    arrow_length = 0.4 # Defines how long the arrow body is
     
     if magnitude < 0: 
         # Negative load: Under the beam, pointing DOWN, colored Red
@@ -73,7 +70,7 @@ def draw_point_load(x, magnitude, level=0):
         y_start = level * arrow_length            # Tail of the arrow
         y_end = (level + 1) * arrow_length        # Head of the arrow
         sym = "triangle-up"
-        text_pos = "top center"
+        text_pos ="top center" 
         color = "green"
         
     return go.Scatter(
@@ -83,78 +80,119 @@ def draw_point_load(x, magnitude, level=0):
         line=dict(color=color, width=3),
         # size=[0, 15] hides the marker at y_start (tail) and shows it at y_end (head)
         marker=dict(symbol=sym, color=color, size=[0, 15]),
-        # Text is placed only at the head of the arrow
-        text=[None, f"<b>{abs(magnitude):.2f} N</b>"], 
+        # Text is placed only at the head of the arrow (y_end)
+        text=[None, f"<b>{abs(magnitude):.2f} {unit}</b>"],
         textposition=text_pos,
         showlegend=False,
         name="Point Load",
         hovertemplate=f"<b>Point Load</b><br>Location: {x} m<br>Magnitude: {magnitude:.2f} N<extra></extra>"
     )
 
-def draw_moment(x, magnitude, level=0):
-    """Draws a moment arc, expanding the radius outward for overlapping moments."""
-    traces = []
-    # Expand the radius outward for each additional moment at this location
-    radius = 0.4 + (level * 0.3)
+
+def draw_moment_load(x, magnitude, unit="N·m"):
+    theta = np.linspace(0, np.pi, 50)
+    radius = 0.3
     
-    # Draw arc (semi-circle above the beam)
-    theta = np.linspace(0, np.pi, 30)
     x_arc = x + radius * np.cos(theta)
     y_arc = radius * np.sin(theta)
     
-    # Arc line
+    if magnitude < 0:
+        x_arc = x_arc[::-1]
+    
+    traces = []
+    
+    # Arc
     traces.append(go.Scatter(
-        x=x_arc, y=y_arc, mode="lines",
-        line=dict(color="blue", width=2),
-        showlegend=False,
-        hoverinfo="skip"
+        x=x_arc,
+        y=y_arc,
+        mode="lines",
+        line=dict(color="green", width=3),
+        showlegend=False
     ))
     
-    # Arrowhead placement (left side for positive, right side for negative)
-    arrow_x = (x - radius) if magnitude > 0 else (x + radius)
+    # Arrowhead
     traces.append(go.Scatter(
-        x=[arrow_x], y=[0], mode="markers",
-        marker=dict(symbol="triangle-down", color="blue", size=10),
-        showlegend=False, hoverinfo="skip"
-    ))
-        
-    # Add magnitude label, pushed up according to the new radius
-    traces.append(go.Scatter(
-        x=[x], y=[radius + 0.15], mode="text",
-        text=[f"<b>{abs(magnitude):.2f} N·m</b>"],
-        textfont=dict(size=14, color="blue", family="Arial, sans-serif"),
-        showlegend=False,
-        hoverinfo="skip"
+        x=[x_arc[-1]],
+        y=[y_arc[-1]],
+        mode="markers+text",
+        marker=dict(symbol="triangle-right" if magnitude > 0 else "triangle-left", color="green", size=10),
+        text=[f"<b>{abs(magnitude):.2f} {unit}</b>"],
+        textposition="top center",
+        showlegend=False
     ))
     
     return traces
 
-def draw_udl(x_start, x_end, magnitude):
+def draw_distributed_load(start, end, intensity_start, intensity_end, max_intensity, unit="N/m"):
     traces = []
-
-    y_val = 0.5 * (1 if magnitude > 0 else -1)
-    fill_y = 0.5 * (1 if magnitude > 0 else -1)
-
+    
+    if max_intensity == 0:
+        max_intensity = 1 
+        
+    y_start = 0.5 * (1 if intensity_start > 0 else -1) * (abs(intensity_start)/max_intensity)
+    y_end = 0.5 * (1 if intensity_end > 0 else -1) * (abs(intensity_end)/max_intensity)
+    
+    # Draw main area fill
     traces.append(go.Scatter(
-        x=[x_start, x_start],
-        y=[0, y_val],
+        x=[start, start, end, end, start],
+        y=[0, y_start, y_end, 0, 0],
         mode="lines",
-        line=dict(color="purple", width=4),
-        showlegend=False
-    ))
-    traces.append(go.Scatter(
-        x=[x_end, x_end],
-        y=[0, y_val],
-        mode="lines",
-        line=dict(color="purple", width=4),
-        showlegend=False
-    ))
-
-    traces.append(go.Scatter(
-        x=[x_start, x_end, x_end, x_start, x_start],
-        y=[0, 0, fill_y, fill_y, 0],
+        line=dict(color="purple", width=2),
         fill="toself",
-        fillcolor="rgba(128,0,128,0.3)",  # Purple with transparency
+        fillcolor="rgba(128,0,128,0.3)",
+        showlegend=False
+    ))
+    
+    # Add vertical lines at start and end
+    traces.append(go.Scatter(
+        x=[start, start],
+        y=[0, y_start],
+        mode="lines",
+        line=dict(color="purple", width=3),
+        showlegend=False
+    ))
+    
+    traces.append(go.Scatter(
+        x=[end, end],
+        y=[0, y_end],
+        mode="lines",
+        line=dict(color="purple", width=3),
+        showlegend=False
+    ))
+    
+    # Add load intensity labels
+    if intensity_start != 0:
+        traces.append(go.Scatter(
+            x=[start],
+            y=[y_start * 1.2],
+            mode="text",
+            text=[f"<b>{abs(intensity_start):.3f} {unit}</b>"],
+            textposition="top center" if intensity_start > 0 else "bottom center",
+            showlegend=False
+        ))
+        
+    if intensity_end != 0 and abs(start - end) > 0.01: 
+        traces.append(go.Scatter(
+            x=[end],
+            y=[y_end * 1.2],
+            mode="text",
+            text=[f"<b>{abs(intensity_end):.3f} {unit}</b>"],
+            textposition="top center" if intensity_end > 0 else "bottom center",
+            showlegend=False
+        ))
+        
+    return traces
+
+def draw_triangle_load(x_start, x_end, magnitude, unit="N/m"):
+    traces = []
+    
+    # Draw the triangular fill
+    traces.append(go.Scatter(
+        x=[x_start, x_end, x_start],
+        y=[0, 0, 0.5 * (1 if magnitude > 0 else -1)],
+        mode="lines",
+        fill="toself",
+        fillcolor="rgba(0, 0, 255, 0.2)",
         line=dict(color="rgba(0,0,0,0)"),
         showlegend=False
     ))
@@ -164,14 +202,14 @@ def draw_udl(x_start, x_end, magnitude):
         x=[mid_x],
         y=[0.8 * (1 if magnitude > 0 else -1)],
         mode="text",
-        text=[f"<b>{abs(magnitude):.3f} N/m</b>"],
+        text=[f"<b>{abs(magnitude):.3f} {unit}</b>"],
         textposition="top center",
         showlegend=False
     ))
 
     return traces
 
-def draw_reaction(x, magnitude):
+def draw_reaction(x, magnitude, unit="N"):
     arrow_tip = 1.2 * (1 if magnitude > 0 else -1)
     return go.Scatter(
         x=[x, x],
@@ -179,13 +217,13 @@ def draw_reaction(x, magnitude):
         mode="lines+text+markers",
         line=dict(color="red", width=4),
         marker=dict(symbol="triangle-up" if magnitude > 0 else "triangle-down", color="red", size=10),
-        text=[None, f"<b>{abs(magnitude):.2f} N</b>"],
+        text=[None, f"<b>{abs(magnitude):.2f} {unit}</b>"],
         textposition="top center" if magnitude > 0 else "bottom center",
         showlegend=False,
-        name="Vertical_R", # Legend entry for vertical reaction
+        name="Vertical_R", 
     )
 
-def draw_horizontal_reaction(x, magnitude):
+def draw_horizontal_reaction(x, magnitude, unit="N"):
     arrow_tip = x + 1.2 * (1 if magnitude > 0 else -1)
     return go.Scatter(
         x=[x, arrow_tip],
@@ -193,10 +231,8 @@ def draw_horizontal_reaction(x, magnitude):
         mode="lines+text+markers",
         line=dict(color="orange", width=4),
         marker=dict(symbol="triangle-right" if magnitude > 0 else "triangle-left", color="orange", size=10),
-        text=[None, f"<b>{abs(magnitude):.2f} N</b>"],
-        textposition="top right" if magnitude > 0 else "top left",  # Adjusted to avoid overlap
+        text=[None, f"<b>{abs(magnitude):.2f} {unit}</b>"],
+        textposition="middle right" if magnitude > 0 else "middle left",
         showlegend=False,
-        name="Horizontal_R", # Legend entry for horizontal reaction
+        name="Horizontal_R", 
     )
-
-
