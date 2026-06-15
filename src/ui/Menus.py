@@ -39,8 +39,8 @@ def get_divisor(units_dict, quantity):
     if quantity == 'length_small': return 0.0254 if is_imperial else 0.001  # m -> in OR m -> mm
     if quantity == 'force': return 4.4482216 if is_imperial else 1.0
     if quantity == 'moment': return 1.3558179 if is_imperial else 1.0
-    if quantity == 'inertia': return (0.3048)**4 if is_imperial else 1.0
-    if quantity == 'sec_mod': return (0.3048)**3 if is_imperial else 1.0
+    if quantity == 'inertia': return (0.0254)**4 if is_imperial else 1.0
+    if quantity == 'sec_mod': return (0.0254)**3 if is_imperial else 1.0
     if quantity == 'modulus': return 6894757.29 if is_imperial else 1e9     # Pa -> ksi OR Pa -> GPa
     if quantity == 'stress': return 6894757.29 if is_imperial else 1e6      # Pa -> ksi OR Pa -> MPa
     if quantity == 'density': return 16.01846 if is_imperial else 1.0       # kg/m³ -> lb/ft³ OR keep kg/m³
@@ -54,7 +54,7 @@ def get_inverse_multiplier(units_dict, quantity):
             'length': 0.3048, 
             'force': 4.4482216, 
             'moment': 1.3558179,
-            'inertia': (0.3048)**4  # Example: m^4 to ft^4
+            'inertia': (0.0254)**4  # Example: m^4 to ft^4
         }
         return multipliers.get(quantity, 1.0)
     return 1.0 # Metric is already 1.0
@@ -945,14 +945,16 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     
     # Format max deflection with appropriate units
     max_defl_abs = abs(max_defl)
+    small_len_div = get_divisor(units, 'length_small') # Get the proper divisor (0.001 or 0.0254)
+    
     if max_defl_abs < 1e-3:
-        max_defl_str = f"{max_defl*1000:.4f} {units['length_small']}" # <-- CHANGED
-        deflection_unit = units['length_small'] # <-- CHANGED
-        scaling_factor = 1000
+        max_defl_str = f"{max_defl / small_len_div:.4f} {units['length_small']}" 
+        deflection_unit = units['length_small'] 
+        scaling_factor = 1.0 / small_len_div
     else:
-        max_defl_str = f"{max_defl:.6f} {units['length']}" # <-- CHANGED
-        deflection_unit = units['length'] # <-- CHANGED
-        scaling_factor = 1
+        max_defl_str = f"{max_defl / len_div:.6f} {units['length']}" 
+        deflection_unit = units['length'] 
+        scaling_factor = 1.0 / len_div
     
     print(colored("│ Maximum Deflection:", 'green') + colored(f" {max_defl_str} {'↑' if max_defl > 0 else '↓'}", 'white'))
     print(colored("│ Location of Maximum:", 'green') + colored(f" x = {max_defl_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
