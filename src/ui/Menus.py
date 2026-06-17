@@ -411,7 +411,7 @@ def postprocessing_menu():
         ("📈 Shear-Stress", "Display Shear stress distribution"),
         ("📈 Bending-Stress", "Display Bending stress distribution"),
         ("📉 Deflection Plots", "Show beam displacement curves"),
-        ("📑 Combined Plots", "Show all diagrams together (Plotly Only)"),
+        ("📑  Plots", "Show all diagrams together (Plotly Only)"),
         ("⬅️  Return to Main Menu", "Go back to the main menu")
     ]
     
@@ -898,7 +898,7 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
         Array of curvature values along the beam
     """
     clear_screen()
-    
+    len_div = 0.3048 if units.get('length') == 'ft' else 1.0
     # Find maximum deflection and its location
     max_defl_idx = np.argmax(np.abs(Deflection))
     max_defl = Deflection[max_defl_idx]

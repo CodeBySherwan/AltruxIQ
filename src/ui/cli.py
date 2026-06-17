@@ -7,6 +7,7 @@ It handles project management, profile and material selection, boundary conditio
 load definitions, analysis, postprocessing, and project save/load functionalities.
 """
 # modules
+from string import templatelib
 import json
 import os
 import sys
@@ -28,11 +29,11 @@ if src_dir not in sys.path:
     
 # Application modules
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
-from solver.main_solver import solve_simple_beam,solve_cantilever_beam
+from solver.indeterminate_solver import solve_beam
 from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
                       Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined)
-from plotting.beam_plot import plot_reaction_diagram, plot_beam_schematic,plot_cantilever_beam_schematic
+from plotting.beam_plot import plot_reaction_diagram, plot_beam_schematic
 from solver.stress_solver import (calculate_beam_deflection,
                          first_moment_of_area_rect, first_moment_of_area_general,
                          width_array_for_section, calculate_shear_stress,
@@ -40,8 +41,19 @@ from solver.stress_solver import (calculate_beam_deflection,
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
                  postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor)
-from ui.inputs import Beam_Length, Beam_Supports, manage_loads,Beam_Classification
+from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_continuous_supports
+  
 
+class NumpyEncoder(json.JSONEncoder):
+    """Custom encoder that converts NumPy arrays and scalars to standard Python types for JSON."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyEncoder, self).default(obj)
 # -----------------------------
 # Global Storage Variables
 # -----------------------------
@@ -81,6 +93,7 @@ y_array = np.array([])
 section_dims = {}
 support_types = ("pin", "roller")  # BUG-10 FIX: module-level default; overwritten on load/save
 beam_type = None  # BUG-05 FIX: initialise at module level to prevent NameError
+supports_list = []  # NEW: Used for Continuous multi-span beams
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
 Deflection = None
 Slope = None
@@ -230,7 +243,27 @@ def load_project():
         X_Field = np.array(current_project.get('X_Field', []))
         Total_ShearForce = np.array(current_project.get('Total_ShearForce', []))
         Total_BendingMoment = np.array(current_project.get('Total_BendingMoment', []))
-        Reactions = np.array(current_project.get('Reactions', []))
+        
+        # Load Reactions natively (list of dicts)
+        Reactions = current_project.get('Reactions', [])
+        
+        # Backward Compatibility: Convert old array format [Va, Vb, Ha] or [Va, Ha, Ma] to new dict format
+        if Reactions and not isinstance(Reactions[0], dict):
+            if beam_type == "Simple":
+                Reactions = [
+                    {"pos": A, "Fx": float(Reactions[2]), "Fy": float(Reactions[0]), "M": 0.0},
+                    {"pos": B, "Fx": 0.0,                 "Fy": float(Reactions[1]), "M": 0.0},]
+            if beam_type == "Overhanging Beam":
+                Reactions = [
+                    {"pos": A, "Fx": float(Reactions[2]), "Fy": float(Reactions[0]), "M": 0.0},
+                    {"pos": B, "Fx": 0.0,                 "Fy": float(Reactions[1]), "M": 0.0},
+                ]
+            elif beam_type == "Cantilever":
+                Reactions = [
+                    {"pos": 0.0, "Fx": float(Reactions[1]), "Fy": float(Reactions[0]), "M": float(Reactions[2])},
+                ]
+            else:
+                Reactions = []
         
         # Load and assign loads
         loads = current_project.get('loads', {})
@@ -347,7 +380,8 @@ def modify_loaded_project_data():
             return
             
         elif choice == '3':
-            project_state["supports_saved"] = False
+            if beam_type not in ("Cantilever", "Fixed-Fixed", "Propped", "Simple"):
+                project_state["supports_saved"] = False
             project_state["has_unsaved_changes"] = True
             print_success("Boundary conditions can now be modified.")
             time.sleep(1)
@@ -400,7 +434,7 @@ def delete_project():
             del beam_storage[selection - 1]
             try:
                 with open('beam_projects.json', 'w') as file:
-                    json.dump(beam_storage, file, indent=4)
+                    json.dump(beam_storage, file, cls=NumpyEncoder, indent=4)
                 print_success(f"Project '{project_to_delete['name']}' deleted successfully!")
             except Exception as e:
                 print_error(f"Error saving updated project file: {e}")
@@ -458,7 +492,7 @@ def save_project():
         'X_Field': safe_serialize(X_Field),
         'Total_ShearForce': safe_serialize(Total_ShearForce),
         'Total_BendingMoment': safe_serialize(Total_BendingMoment),
-        'Reactions': safe_serialize(Reactions),
+        'Reactions': Reactions,  # NEW: Already a list of dicts, no serialization needed
         'loads': loads if loads is not None else {},
         'profile': profile_data,
         'material': material_data
@@ -488,19 +522,15 @@ def save_project():
 
 # =============================
 def save_projects_to_disk():
-    """
-    Save all global projects to disk as a JSON file.
-    Uses indentation for human readability.
-    """
-    global beam_storage
     try:
         with open('beam_projects.json', 'w') as file:
-            json.dump(beam_storage, file, indent=4)
-        print_success("All projects saved to disk successfully!")
-        return True
+            json.dump(beam_storage, file, cls=NumpyEncoder, indent=4)
+            
+        print_success("Project saved to disk successfully!") # Only prints if dump succeeds
+        
     except Exception as e:
         print_error(f"Error saving projects to disk: {e}")
-        return False
+        # Notice there is no success print statement here
 
 # =============================
 def load_projects_from_disk():
@@ -792,16 +822,21 @@ def run_extended_menu():
         elif selection == '2':  # Define Beam Type
             while True:
                 beam_type = Beam_Classification()
-                if beam_type == "Simple" or beam_type == "Cantilever":
-                    if beam_type == "Cantilever":
+                if beam_type in ["Simple", "Cantilever", "Fixed-Fixed", "Propped", "Continuous","Overhanging Beam"]:
+                    # Automatically fulfill the supports gate logic for fixed boundary types
+                    if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
                         project_state["supports_saved"] = True
-                    
+                    elif beam_type == "Continuous" or beam_type:
+                        project_state["supports_saved"] = False
+                    elif beam_type== "Overhanging Beam":
+                        project_state["supports_saved"] = False
                     # Update beam_type in current_project if it exists
                     if current_project is not None:
                         current_project["beam_type"] = beam_type
                         project_state["has_unsaved_changes"] = True
                     
                     break
+
                 else:
                     print_error("Invalid Beam Classification. Please try again.")
                     time.sleep(1)
@@ -829,6 +864,18 @@ def run_extended_menu():
                     cprint(f"Beam Length is set to: {beam_length / len_div:.3f} {current_labels['length']}",'white')
                     cprint("==========================================================", 'red')
                     time.sleep(1)
+                    
+                    # Auto-define default Simple beam supports if not yet set
+                    if beam_type == "Simple" and (A == 0.0 and B == 0.0):
+                        A = 0.0
+                        B = beam_length
+                        A_restraint = (1, 1, 0)
+                        B_restraint = (0, 1, 0)
+                        A_type = "Pin Support"
+                        B_type = "Roller Support"
+                        support_types = ("pin", "roller")
+                        project_state["supports_saved"] = True
+                        project_state["has_unsaved_changes"] = True
                     
                 elif sub_choice == '2':  # Choose profile
                     if project_state["is_loaded"] and project_state["profile_saved"]:
@@ -941,14 +988,41 @@ def run_extended_menu():
 
 
         elif selection == '5':  # Boundary Conditions
-
-            if beam_type == "Cantilever":
-                print_error("Cantilever beams Boundary Conditions Already Defined !!!!")
+            if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
+                print_error(f"{beam_type} beams boundary conditions are automatically determined!")
+                time.sleep(2)
+           
+           
+           
+            elif beam_type == "Simple":
+                if beam_length <= 0:
+                    print_error("Please define beam length first (Menu 3) before supports can be auto-defined.")
+                    time.sleep(2)
+                    continue
+                if not project_state["supports_saved"] or (A == 0.0 and B == 0.0):
+                    A = 0.0
+                    B = beam_length
+                    A_restraint = (1, 1, 0)
+                    B_restraint = (0, 1, 0)
+                    A_type = "Pin Support"
+                    B_type = "Roller Support"
+                    support_types = ("pin", "roller")
+                    project_state["supports_saved"] = True
+                    project_state["has_unsaved_changes"] = True
+                    print_success("Simple beam supports auto-defined: Pin at x=0, Roller at x=L")
+                else:
+                    print_success("Simple beam supports already defined.")
                 time.sleep(2)
                 
+            elif beam_type == "Continuous":
+                global supports_list
+                supports_list = define_continuous_supports(beam_length, current_unit_system, current_labels)
+                project_state["supports_saved"] = True
+                project_state["has_unsaved_changes"] = True
+                support_types = tuple(["roller" for _ in supports_list]) # Placeholder for schematic plots
 
-            elif beam_type == "Simple":
-                while True:
+            elif beam_type == "Overhanging Beam":
+                  while True:
                     sub_choice = boundary_conditions_menu()
                     if sub_choice == '3':  # Back to main menu
                         break   
@@ -967,7 +1041,6 @@ def run_extended_menu():
                         cprint("==========================================================", 'red')
                         cprint("                Selected Support Positions                                 ", 'light_yellow')
                         cprint("==========================================================", 'red')
-# Apply the same `len_div` math to the print statements for A and B.
                         print(f"Pin Support Position(A): {A / len_div:.3f} {current_labels['length']}")
                         print(f"Roller Support Position(B): {B / len_div:.3f} {current_labels['length']}")
                         cprint("==========================================================", 'red')
@@ -1058,18 +1131,14 @@ def run_extended_menu():
 
                         try:
                             formatted_loads = format_loads_for_plotting(loads_dict)
-                            if beam_type=="Simple":
-                                formatted_loads = format_loads_for_plotting(loads_dict)
-                                plot_beam_schematic(beam_length, A, B, support_types, formatted_loads,units=current_labels)
-                            elif beam_type=="Cantilever":
-                                 fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis",units=current_labels)
-                                 fig.show()
+                            # Single universal call handles all beam types automatically
+                            plot_beam_schematic(
+                                beam_type, beam_length, A, B, 
+                                supports_list, formatted_loads, units=current_labels
+                            )
                         except Exception as e:
                             print_error(f"Error plotting beam schematic: {e}")
                             time.sleep(2)
-                    else:
-                        print_error("Invalid selection! Please try again.")
-                        time.sleep(2)
                     
         elif selection == '7':  # Show Beam Schematic (Standalone)
                 if not project_state["loads_saved"]:
@@ -1080,14 +1149,14 @@ def run_extended_menu():
                     print_error("Please Check your Entered Supports!")
                     time.sleep(2)
                     continue
-
+                
                 try:
                     formatted_loads = format_loads_for_plotting(loads)
-                    if beam_type=="Simple":
-                        plot_beam_schematic(beam_length, A, B, support_types, formatted_loads,units=current_labels)
-                    elif beam_type=="Cantilever":
-                         fig = plot_cantilever_beam_schematic(beam_length, formatted_loads, "Cantilever Beam Analysis",units=current_labels)
-                         fig.show()
+                    # Single universal call handles all beam types automatically
+                    plot_beam_schematic(
+                        beam_type, beam_length, A, B, 
+                        supports_list, formatted_loads, units=current_labels
+                    )
                 except Exception as e:
                     print_error(f"Error plotting beam schematic: {e}")
                     time.sleep(2)
@@ -1129,37 +1198,64 @@ def run_extended_menu():
                         
         
                         # Perform the analysis with proper arguments
+                        # Build internal constraints array for indeterminate package
                         if beam_type == "Simple":
-                            X_Field, Total_ShearForce, Total_BendingMoment, Reactions = solve_simple_beam(
-                                beam_length, A=A, B=B,
-                                pointloads_in=pointloads, 
-                                distributedloads_in=distributedloads,
-                                momentloads_in=momentloads, 
-                                triangleloads_in=triangleloads,
-                                beam_type=beam_type
-                            )
+                            _supports = [
+                                {"pos": A, "dof": (1,1,0), "ky": None, "kx": None},
+                                {"pos": B, "dof": (0,1,0), "ky": None, "kx": None},
+                            ]
+                        elif beam_type == "Overhanging Beam":
+                            _supports = [
+                                {"pos": A, "dof": (1,1,0), "ky": None, "kx": None},
+                                {"pos": B, "dof": (0,1,0), "ky": None, "kx": None}, 
+                            ]                          
                         elif beam_type == "Cantilever":
-                             X_Field, Total_ShearForce, Total_BendingMoment, Reactions = solve_cantilever_beam(
-                                 beam_length, 
-                                 pointloads_in=pointloads,
-                                 distributedloads_in=distributedloads,
-                                 momentloads_in=momentloads, 
-                                 triangleloads_in=triangleloads
-                             )
-        
-                        # Mark results as available for use in other menus
+                            _supports = [{"pos": 0.0, "dof": (1,1,1), "ky": None, "kx": None}]
+                        elif beam_type == "Fixed-Fixed":
+                            _supports = [
+                                {"pos": 0.0,         "dof": (1,1,1), "ky": None, "kx": None},
+                                {"pos": beam_length, "dof": (1,1,1), "ky": None, "kx": None},
+                            ]
+                        elif beam_type == "Propped":
+                            _supports = [
+                                {"pos": 0.0,         "dof": (1,1,1), "ky": None, "kx": None},
+                                {"pos": beam_length, "dof": (0,1,0), "ky": None, "kx": None},
+                            ]
+                        elif beam_type == "Continuous":
+                            _supports = supports_list
+
+                        # Invoke unified SymPy solver adapter
+                        result = solve_beam(
+                            beam_length=beam_length,
+                            beam_type=beam_type,
+                            supports=_supports,
+                            pointloads=pointloads,
+                            distributedloads=distributedloads,
+                            momentloads=momentloads,
+                            triangleloads=triangleloads,
+                            E=elastic_modulus,
+                            I=Ix,
+                            num_points=2001 # If it takes long time Decreass to 501
+                        )
+                        
+                        # Populate global response arrays directly
+                        X_Field = result["X_Field"]
+                        Total_ShearForce = result["Total_ShearForce"]
+                        Total_BendingMoment = result["Total_BendingMoment"]
+                        Deflection = result["Deflection"]
+                        Reactions = result["Reactions"]
+                        Slopes = result["Slopes"]
+                        Curvatures = result["Curvatures"]
+                        # Analysis and deflection calculated in one pass
                         project_state["analysis_complete"] = True
+                        project_state["deflection_calculated"] = True
                         project_state["has_unsaved_changes"] = True
-        
-                        # Extract and display key results
-                        if beam_type == "Simple":
-                            Va = Reactions[0]
-                            Ha = Reactions[2]
-                            Vb = Reactions[1]
-                        else:
-                            Va = Reactions[0]
-                            Ha = Reactions[1]
-                            Ma = Reactions[2]
+
+                        # Safely unpack dictionary variables for the UI Display payload
+                        Va = next((r["Fy"] for r in Reactions if r["pos"] == A), 0.0) if beam_type == "Simple" else next((r["Fy"] for r in Reactions if r["pos"] == 0.0), 0.0)
+                        Ha = next((r["Fx"] for r in Reactions if r["pos"] == A), 0.0) if beam_type == "Simple" else next((r["Fx"] for r in Reactions if r["pos"] == 0.0), 0.0)
+                        Vb = next((r["Fy"] for r in Reactions if r["pos"] == B), 0.0) if beam_type == "Simple" else next((r["Fy"] for r in Reactions if r["pos"] == beam_length), 0.0)
+                        Ma = next((r["M"]  for r in Reactions if r["pos"] == 0.0), 0.0)
 
                         max_shear = round(np.max(Total_ShearForce), 3)
                         min_shear = round(np.min(Total_ShearForce), 3)
@@ -1192,17 +1288,11 @@ def run_extended_menu():
                         continue
         
                     try:
-                        # Extract key results
-                        if beam_type == "Simple":
-                            Va = Reactions[0]
-                            Ha = Reactions[2]
-                            Vb = Reactions[1]
-                            Ma = None
-                        else:  # Cantilever
-                            Va = Reactions[0]
-                            Ha = Reactions[1]
-                            Ma = Reactions[2]
-                            Vb = None
+                        # Extract key results from list of dicts
+                        Va = next((r["Fy"] for r in Reactions if r["pos"] == A), 0.0) if beam_type == "Simple" else next((r["Fy"] for r in Reactions if r["pos"] == 0.0), 0.0)
+                        Ha = next((r["Fx"] for r in Reactions if r["pos"] == A), 0.0) if beam_type == "Simple" else next((r["Fx"] for r in Reactions if r["pos"] == 0.0), 0.0)
+                        Vb = next((r["Fy"] for r in Reactions if r["pos"] == B), 0.0) if beam_type == "Simple" else next((r["Fy"] for r in Reactions if r["pos"] == beam_length), 0.0)
+                        Ma = next((r["M"]  for r in Reactions if r["pos"] == 0.0), 0.0)
 
                         max_shear = round(np.max(Total_ShearForce), 3)
                         min_shear = round(np.min(Total_ShearForce), 3)
@@ -1258,13 +1348,7 @@ def run_extended_menu():
                         print(colored("│ ⬤ Finalizing deflection profile...", 'yellow'))
                         print(colored("│", 'yellow'))
                         print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-        
-                        # Perform actual calculation
-                        Deflection, Slope, curv = calculate_beam_deflection(
-                            X_Field, Total_BendingMoment, elastic_modulus, Ix, beam_type, A, B)
-                        # Update project state
-                        project_state["deflection_calculated"] = True
-                        project_state["has_unsaved_changes"] = True
+
         
                         # Display results in professional format
                         display_deflection_analysis(
@@ -1274,8 +1358,8 @@ def run_extended_menu():
                             elastic_modulus=elastic_modulus,
                             Ix=Ix,
                             Deflection=Deflection,
-                            Slope=Slope,
-                            curv=curv,
+                            Slope=Slopes,
+                            curv=Curvatures,
                             units=current_labels
                         )
         
@@ -1367,7 +1451,7 @@ def run_extended_menu():
                 if sub_choice == '1':  # Reaction forces schematic
                     try:
                         print_success("Processing Reactions Forces Schematic Plots (Plotly-only):")
-                        plot_reaction_diagram(A, B, Reactions, support_types)
+                        plot_reaction_diagram(Reactions, units=current_labels)
                     except Exception as e:
                         print_error(f"Error plotting reaction diagram: {e}")
                         time.sleep(2)
@@ -1378,10 +1462,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Force Plot (Matplotlib):")
-                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'SFD')
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'SFD',units=current_labels)
                         elif style == '2':
                                 print_success("Processing Shear Force Plot Plot(Plotly):")
-                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'SFD')
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'SFD',units=current_labels)
                         
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")
@@ -1393,10 +1477,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Bending Moment Plot (Matplotlib):")
-                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'BMD')
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'BMD',units=current_labels)
                         elif style == '2':
                                 print_success("Processing Bending Moment Plot Plot(Plotly):")
-                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'BMD')
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'BMD',units=current_labels)
  
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")
@@ -1408,10 +1492,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Force/Bending Moment Plots (Matplotlib):")
-                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'Both')
+                            Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'Both',units=current_labels)
                         elif style == '2':
                                 print_success("Processing Shear Force/Bending Moment Plots(Plotly):")
-                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'Both')
+                                Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'Both',units=current_labels)
 
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")
@@ -1428,11 +1512,11 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Stress Plot (Matplotlib):")
-                            Matplot_ShearStress(X_Field, Shear_stress)
+                            Matplot_ShearStress(X_Field, Shear_stress,units=current_labels)
 
                         elif style == '2':
                             print_success("Processing Shear Stress Plot(Plotly):")
-                            Plotly_ShearStress(X_Field, Shear_stress, beam_length)
+                            Plotly_ShearStress(X_Field, Shear_stress, beam_length,units=current_labels)
                             
                         else:
                             print_error("Invalid style selection!")
@@ -1452,10 +1536,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Bending Stress Plots (Matplotlib):")
-                            Matplot_BendingStress(X_Field, bending_stress)
+                            Matplot_BendingStress(X_Field, bending_stress,units=current_labels)
                         elif style == '2':
                             print_success("Processing shear/Bending Plots (Plotly):")
-                            Plotly_BendingStress(X_Field, bending_stress, beam_length)
+                            Plotly_BendingStress(X_Field, bending_stress, beam_length,units=current_labels)
                         else:
                             print_error("Invalid style selection!")
                             time.sleep(2)
@@ -1475,10 +1559,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Deflection/Displacement Plots (Matplotlib):")
-                            Matplot_Deflection(X_Field, Deflection)
+                            Matplot_Deflection(X_Field, Deflection,units=current_labels)
                         elif style == '2':
                             print_success("Processing Deflection/Displacement Plots (Plotly):")
-                            Plotly_Deflection(X_Field, Deflection, beam_length)
+                            Plotly_Deflection(X_Field, Deflection, beam_length,units=current_labels)
                         else:
                             print_error("Invalid style selection!")
                             time.sleep(2)
@@ -1502,7 +1586,7 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
 
                         print_success("Processing Combined Plots (Plotly Only):")
-                        Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data)
+                        Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data,units=current_labels)
 
                     except Exception as e:
                         print_error(f"Error in Plotting !!! : {e}")

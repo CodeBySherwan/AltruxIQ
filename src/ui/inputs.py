@@ -39,7 +39,7 @@ def Beam_Classification():
     explanations and visual representations.
     
     Returns:
-        str: Selected beam type ("Simple" or "Cantilever")
+        str: Selected beam type
     """
     clear_screen()
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
@@ -52,129 +52,55 @@ def Beam_Classification():
     
     # Option 1: Simple Supported Beam
     print(colored("│ 1 - Simple Supported Beam", 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    print(colored("│    Description:", 'green') + colored(" A beam supported at both ends with", 'white'))
-    print(colored("│                 ", 'green') + colored(" no portion extending beyond supports.", 'white'))
-    print(colored("│", 'yellow'))
-    print(colored("│    Visual:", 'green'))
-    print(colored("│           ↑                      ↑      ", 'white'))
-    print(colored("│           |                      |      ", 'white'))
-    print(colored("│    ─────────────────────────────────────", 'white'))
-    print(colored("│    ◯                                   △      ", 'white'))
-    print(colored("│    Roller                      Pin      ", 'white'))
-    print(colored("│", 'yellow'))
-    print(colored("│    Applications:", 'green') + colored(" Bridge spans, floor joists, roof beams", 'white'))
+    print(colored("│    Visual:  ◯ (Roller) ────────────── △ (Pin)", 'white'))
     print(colored("│", 'yellow'))
     
     # Option 2: Overhanging Beam
     print(colored("│ 2 - Overhanging Beam", 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    print(colored("│    Description:", 'green') + colored(" A simply supported beam with one or both", 'white'))
-    print(colored("│                 ", 'green') + colored(" ends extending beyond the supports.", 'white'))
-    print(colored("│", 'yellow'))
-    print(colored("│    Visual:", 'green'))
-    print(colored("│                 ↑           ↑                ", 'white'))
-    print(colored("│                 |           |                ", 'white'))
-    print(colored("│    ─────────────────────────────────────────", 'white'))
-    print(colored("│                 ◯           △                ", 'white'))
-    print(colored("│              Roller        Pin     Overhang ", 'white'))
-    print(colored("│", 'yellow'))
-    print(colored("│    Applications:", 'green') + colored(" Building eaves, balconies, footbridges,", 'white'))
-    print(colored("│                 ", 'green') + colored(" cantilevered structural systems", 'white'))
+    print(colored("│    Visual:  ──── ◯ ──────────────── △ ───", 'white'))
     print(colored("│", 'yellow'))
     
     # Option 3: Cantilever Beam
     print(colored("│ 3 - Cantilever Beam", 'yellow', attrs=['bold']))
+    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━━━ (Free)", 'white'))
     print(colored("│", 'yellow'))
-    print(colored("│    Description:", 'green') + colored(" A beam fixed at one end and free at", 'white'))
-    print(colored("│                 ", 'green') + colored(" the other end.", 'white'))
+
+    # Option 4: Fixed-Fixed Beam (Indeterminate)
+    print(colored("│ 4 - Fixed-Fixed Beam", 'yellow', attrs=['bold']))
+    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━ | (Fixed)", 'white'))
     print(colored("│", 'yellow'))
-    print(colored("│    Visual:", 'green'))
-    print(colored("│    |", 'white'))
-    print(colored("│    |", 'white'))
-    print(colored("│    |━━━━━━━━━━━━━━━━━━━━━━━━━", 'white'))
-    print(colored("│    |", 'white'))
-    print(colored("│  Fixed                  Free", 'white'))
+
+    # Option 5: Propped Cantilever Beam (Indeterminate)
+    print(colored("│ 5 - Propped Cantilever Beam", 'yellow', attrs=['bold']))
+    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━ ◯ (Roller)", 'white'))
     print(colored("│", 'yellow'))
-    print(colored("│    Applications:", 'green') + colored(" Balconies, canopies, crane arms,", 'white'))
-    print(colored("│                 ", 'green') + colored(" diving boards, flag poles", 'white'))
-    print(colored("│", 'yellow'))
+
+    # Option 6: Continuous Beam (Multi-span Indeterminate)
+    print(colored("│ 6 - Continuous Beam (Multi-span)", 'yellow', attrs=['bold']))
+    print(colored("│    Visual:  △ ──────── ◯ ──────── ◯ ──────── ◯", 'white'))
+    
     print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
     
     print("\n")
-    classification = input(colored("Enter your choice [1-3] ➔ ", 'cyan', attrs=['bold']))
+    classification = input(colored("Enter your choice [1-6] ➔ ", 'cyan', attrs=['bold']))
     
     if classification == '1':
-        clear_screen()
-        print_success("Simple Supported Beam selected.")
-        print("\n")
-        print(colored("╔══════════════════════════════════════════════════════════════╗", 'green', attrs=['bold']))
-        print(colored("║                SIMPLE SUPPORTED BEAM SELECTED                ║", 'green', attrs=['bold']))
-        print(colored("╚══════════════════════════════════════════════════════════════╝", 'green', attrs=['bold']))
-        print("\n")
-        print(colored("Simple Supported Beam Configuration:", 'white', attrs=['bold']))
-        print(colored("• Supports at both ends", 'white'))
-        print(colored("• Typically with a pin support at one end and roller at the other", 'white'))
-        print(colored("• Free to rotate at supports", 'white'))
-        print(colored("• Can handle both symmetric and asymmetric loading", 'white'))
-        print("\n")
-        print(colored("Next Steps:", 'cyan'))
-        print(colored("1. Define beam length", 'white'))
-        print(colored("2. Select profile (cross-section)", 'white'))
-        print(colored("3. Configure supports", 'white'))
-        print("\n")
-        input(colored("Press Enter to continue...", 'cyan', attrs=['bold']))
         return "Simple"
-        
     elif classification == '2':
-        clear_screen()
-        print_success("Overhanging Beam selected.")
-        print("\n")
-        print(colored("╔══════════════════════════════════════════════════════════════╗", 'green', attrs=['bold']))
-        print(colored("║                   OVERHANGING BEAM SELECTED                  ║", 'green', attrs=['bold']))
-        print(colored("╚══════════════════════════════════════════════════════════════╝", 'green', attrs=['bold']))
-        print("\n")
-        print(colored("Overhanging Beam Configuration:", 'white', attrs=['bold']))
-        print(colored("• Supports at two points with beam extending beyond one or both supports", 'white'))
-        print(colored("• Typically uses pin and roller support combination", 'white'))
-        print(colored("• Creates both positive and negative bending moments", 'white'))
-        print(colored("• Can achieve better moment distribution and material efficiency", 'white'))
-        print(colored("• Mathematically treated as a simply supported beam", 'white'))
-        print("\n")
-        print(colored("Next Steps:", 'cyan'))
-        print(colored("1. Define beam length (including overhang portions)", 'white'))
-        print(colored("2. Select profile (cross-section)", 'white'))
-        print(colored("3. Configure supports and their positions", 'white'))
-        print("\n")
-        input(colored("Press Enter to continue...", 'cyan', attrs=['bold']))
-        return "Simple"  # Returns "Simple" as overhanging beams are a type of simply supported beam
-        
+        # Treated as simple layout with custom offsets internally
+        return "Overhanging Beam"  
     elif classification == '3':
-        clear_screen()
-        print_success("Cantilever Beam selected.")
-        print("\n")
-        print(colored("╔══════════════════════════════════════════════════════════════╗", 'green', attrs=['bold']))
-        print(colored("║                   CANTILEVER BEAM SELECTED                   ║", 'green', attrs=['bold']))
-        print(colored("╚══════════════════════════════════════════════════════════════╝", 'green', attrs=['bold']))
-        print("\n")
-        print(colored("Cantilever Beam Configuration:", 'white', attrs=['bold']))
-        print(colored("• Fixed support at one end (built-in/encastre)", 'white'))
-        print(colored("• Free end with no support", 'white'))
-        print(colored("• No rotation or translation at fixed support", 'white'))
-        print(colored("• Maximum bending moment occurs at the fixed support", 'white'))
-        print("\n")
-        print(colored("Next Steps:", 'cyan'))
-        print(colored("1. Define beam length", 'white'))
-        print(colored("2. Select profile (cross-section)", 'white'))
-        print(colored("3. Define loads", 'white'))
-        print("\n")
-        input(colored("Press Enter to continue...", 'cyan', attrs=['bold']))
         return "Cantilever"
-        
+    elif classification == '4':
+        return "Fixed-Fixed"
+    elif classification == '5':
+        return "Propped"
+    elif classification == '6':
+        return "Continuous"
     else:
-        print_error("Invalid selection! Please choose a number between 1 and 3.")
+        print_error("Invalid selection! Please choose a number between 1 and 6.")
         time.sleep(1.5)
-        return Beam_Classification()  # Recursively call the function for another attempt
+        return Beam_Classification()
 
 def Beam_Length(unit_system="Metric", units=None):
     """Prompt the user to enter the beam length."""
@@ -221,6 +147,70 @@ def Beam_Supports(unit_system="Metric", units=None):
     except ValueError as ve:
         print_error(f"Input error: {ve}")
         return None, None, None, None, None, None
+
+
+def define_continuous_supports(beam_length, unit_system="Metric", units=None):
+    """
+    Prompt the user to enter multiple support coordinates for a continuous beam.
+    Returns a list of dicts: [{"pos": float, "dof": (0,1,0), "ky": None, "kx": None}, ...]
+    """
+    if units is None: units = {'length': 'm'}
+    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    inv_multiplier = 1.0 / multiplier
+    
+    while True:
+        clear_screen()
+        print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+        print(colored("║                CONTINUOUS BEAM SUPPORTS                      ║", 'cyan', attrs=['bold']))
+        print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+        print("\n")
+        
+        print(colored(f"Beam Length: {beam_length * inv_multiplier:.2f} {units['length']}", 'white', attrs=['bold']))
+        print(colored("Continuous beams require defining the exact position of all supports.", 'white'))
+        print("\n")
+        
+        try:
+            num_supports = int(input(colored("Enter total number of supports (minimum 2): ➔ ", 'cyan')))
+            if num_supports < 2:
+                print_error("A continuous beam must have at least 2 supports.")
+                time.sleep(1.5)
+                continue
+                
+            supports = []
+            for i in range(num_supports):
+                while True:
+                    pos_raw = float(input(colored(f"  Enter position for Support {i+1} ({units['length']}): ➔ ", 'cyan')))
+                    pos = pos_raw * multiplier
+                    
+                    if pos < 0 or pos > beam_length:
+                        print_error(f"Support position must be between 0 and beam length.")
+                        continue
+                        
+                    if any(abs(s["pos"] - pos) < 1e-5 for s in supports):
+                        print_error("A support already exists at this location. Enter a unique position.")
+                        continue
+                        
+                    # Pin the first support to keep beam horizontally stable; roll the others
+                    dof = (1, 1, 0) if i == 0 else (0, 1, 0)
+                    
+                    supports.append({
+                        "pos": pos,
+                        "dof": dof,
+                        "ky": None,
+                        "kx": None
+                    })
+                    break
+                    
+            # Sort chronologically along span length
+            supports.sort(key=lambda x: x["pos"])
+            
+            print_success(f"\nSuccessfully configured {len(supports)} supports!")
+            time.sleep(1.5)
+            return supports
+            
+        except ValueError:
+            print_error("Invalid input. Please enter valid numeric digits.")
+            time.sleep(1.5)
 #==============================
 def manage_loads(unit_system="Metric", units=None):
     if units is None:
@@ -523,7 +513,7 @@ def manage_loads(unit_system="Metric", units=None):
                 print(colored("├" + "─"*61, 'green'))
                 for i, load in enumerate(loads['distributedloads'], 1):
                     start, end, intensity = load
-                    print(colored(f"│ {i:2d}) {start/l_mult:7.2f} | {end/l_mult:6.2f} | {intensity/d_mult:13.2f} | {intensityL/d_mult:13.2f}", 'white'))
+                    print(colored(f"│ {i:2d}) {start/l_mult:7.2f} | {end/l_mult:6.2f} | {intensity/d_mult:13.2f}", 'white'))
                 print(colored("└" + "─"*62, 'green', attrs=['bold']))
                 print("")
             else:
