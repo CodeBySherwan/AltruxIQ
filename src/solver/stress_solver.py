@@ -163,6 +163,24 @@ def calculate_beam_deflection(x_field, bending_moment, elastic_modulus, moment_o
         
         return deflection_true, slope_true, curvature
         
+    elif beam_type == "Overhanging Beam":
+        # For simply supported beams, deflection must be 0 at supports A and B.
+        # Use np.interp to find the exact raw deflection at the support coordinates.
+        v_A = np.interp(A, x_field, deflection_raw)
+        v_B = np.interp(B, x_field, deflection_raw)
+        
+        # Solve for the true constants of integration (C1 for slope, C2 for deflection)
+        # v(x) = v_raw(x) + C1*x + C2
+        C1 = (v_A - v_B) / (B - A)
+        C2 = -v_A - C1 * A
+        
+        # Apply corrections to the entire field
+        deflection_true = deflection_raw + C1 * x_field + C2
+        slope_true = slope_raw + C1
+        
+        return deflection_true, slope_true, curvature       
+
+        
 def calculate_shear_stress(shear_force, Q_array, moment_of_inertia, b):
     """
     Calculate shear stress distribution across the beam length and height.
