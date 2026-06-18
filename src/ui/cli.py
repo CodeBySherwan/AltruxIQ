@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 CLI for Zylo-X Beam Calculator
 ===================================
@@ -7,7 +7,7 @@ It handles project management, profile and material selection, boundary conditio
 load definitions, analysis, postprocessing, and project save/load functionalities.
 """
 # modules
-from string import templatelib
+
 import json
 import os
 import sys
@@ -28,21 +28,36 @@ if src_dir not in sys.path:
 
     
 # Application modules
+
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
 from solver.indeterminate_solver import solve_beam
 from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
                       Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined)
 from plotting.beam_plot import plot_reaction_diagram, plot_beam_schematic
+try:
+    from plotting.pyvista_plotting import (
+        PyVista_reactions_schematic,
+        PyVista_shear_force,
+        PyVista_bending_moment,
+        PyVista_shear_stress,
+        PyVista_bending_stress,
+        PyVista_deflection,
+        PyVista_combined,
+    )
+    _PYVISTA_AVAILABLE = True
+except ImportError as _pv_err:
+    _PYVISTA_AVAILABLE = False
+    _pv_import_error   = str(_pv_err)
 from solver.stress_solver import (calculate_beam_deflection,
                          first_moment_of_area_rect, first_moment_of_area_general,
                          width_array_for_section, calculate_shear_stress,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor)
+                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_continuous_supports
-  
+
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom encoder that converts NumPy arrays and scalars to standard Python types for JSON."""
@@ -1439,7 +1454,7 @@ def run_extended_menu():
         elif selection == '9':  # Postprocessing/Visualization
             while True:
                 sub_choice = postprocessing_menu()
-                if sub_choice == '9':  # Back to main menu
+                if sub_choice == '10':  # Back to main menu
                     break
                     
                 # Check if analysis has been completed before allowing visualization
@@ -1523,11 +1538,9 @@ def run_extended_menu():
                             time.sleep(2)
                             continue
                     except Exception as e:
-                        print_error(f"Error plotting shear-Stress Plot: {e}")
+                        print_error(f"Error plotting Shear-Stress Plot: {e}")
                         time.sleep(2)
-
-                elif sub_choice == '6':  # Bending Stress contours
-                
+                elif sub_choice == '6':  # Bending Stress
                     if not project_state.get("stress_calculated", False):
                         print_error("Please calculate stresses first (Analysis menu → option 4)!")
                         time.sleep(2)
@@ -1536,33 +1549,30 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Bending Stress Plots (Matplotlib):")
-                            Matplot_BendingStress(X_Field, bending_stress,units=current_labels)
+                            Matplot_BendingStress(X_Field, bending_stress, units=current_labels)
                         elif style == '2':
-                            print_success("Processing shear/Bending Plots (Plotly):")
-                            Plotly_BendingStress(X_Field, bending_stress, beam_length,units=current_labels)
+                            print_success("Processing Bending Stress Plots (Plotly):")
+                            Plotly_BendingStress(X_Field, bending_stress, beam_length, units=current_labels)
                         else:
                             print_error("Invalid style selection!")
                             time.sleep(2)
                             continue
                     except Exception as e:
-                        print_error(f"Error plotting shear-Stress Plot: {e}")
+                        print_error(f"Error plotting Bending-Stress Plot: {e}")
                         time.sleep(2)
-
-
-                elif sub_choice == '7':  # Deflection plot
+                elif sub_choice == '7':  # Deflection
                     if not project_state.get("deflection_calculated", False):
                         print_error("Please calculate deflection first (in Analysis menu)!")
                         time.sleep(2)
                         continue
-
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Deflection/Displacement Plots (Matplotlib):")
-                            Matplot_Deflection(X_Field, Deflection,units=current_labels)
+                            Matplot_Deflection(X_Field, Deflection, units=current_labels)
                         elif style == '2':
                             print_success("Processing Deflection/Displacement Plots (Plotly):")
-                            Plotly_Deflection(X_Field, Deflection, beam_length,units=current_labels)
+                            Plotly_Deflection(X_Field, Deflection, beam_length, units=current_labels)
                         else:
                             print_error("Invalid style selection!")
                             time.sleep(2)
@@ -1571,10 +1581,9 @@ def run_extended_menu():
                         print_error(f"Error plotting Deflection Plot: {e}")
                         time.sleep(2)
                         continue
-
-                elif sub_choice == '8':  # Combined plots
+                elif sub_choice == '8':  # Combined plots (Plotly/Matplotlib)
                     try:
-                 
+                  
                         defl_data = Deflection if project_state.get("deflection_calculated", False) else None
                         shear_data = Shear_stress if project_state.get("stress_calculated", False) else None
 
@@ -1592,6 +1601,109 @@ def run_extended_menu():
                         print_error(f"Error in Plotting !!! : {e}")
                         time.sleep(2)
                         continue
+
+                elif sub_choice == '9':  # 3D FEA Contour View (PyVista)
+                    if not _PYVISTA_AVAILABLE:
+                        print_error(f"PyVista is not available: {_pv_import_error}")
+                        print_error("Run:  pip install pyvista")
+                        time.sleep(3)
+                        continue
+
+                    while True:
+                        pv_choice = pyvista_menu()
+
+                        if pv_choice == '8':  # Back to postprocessing menu
+                            break
+
+                        # Guard: analysis must be done
+                        if not project_state.get("analysis_complete", False):
+                            print_error("Please complete an analysis first!")
+                            time.sleep(2)
+                            continue
+
+                        try:
+                            if pv_choice == '1':  # Reactions
+                                if not Reactions:
+                                    print_error("No reaction data available. Run analysis first.")
+                                    time.sleep(2)
+                                    continue
+                                print_success("Opening 3D Reactions Schematic (PyVista) ...")
+                                PyVista_reactions_schematic(
+                                    beam_length, Reactions, shape, section_dims,
+                                    c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '2':  # Shear Force
+                                print_success("Opening 3D Shear Force Contour (PyVista) ...")
+                                PyVista_shear_force(
+                                    X_Field, Total_ShearForce, beam_length,
+                                    shape, section_dims, c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '3':  # Bending Moment
+                                print_success("Opening 3D Bending Moment Contour (PyVista) ...")
+                                PyVista_bending_moment(
+                                    X_Field, Total_BendingMoment, beam_length,
+                                    shape, section_dims, c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '4':  # Shear Stress
+                                if not project_state.get("stress_calculated", False):
+                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    time.sleep(2)
+                                    continue
+                                print_success("Opening 3D Shear Stress Contour (PyVista) ...")
+                                PyVista_shear_stress(
+                                    X_Field, Shear_stress, beam_length,
+                                    shape, section_dims, c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '5':  # Bending Stress
+                                if not project_state.get("stress_calculated", False):
+                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    time.sleep(2)
+                                    continue
+                                print_success("Opening 3D Bending Stress Contour (PyVista) ...")
+                                PyVista_bending_stress(
+                                    X_Field, bending_stress, beam_length,
+                                    shape, section_dims, c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '6':  # Deflection
+                                if not project_state.get("deflection_calculated", False):
+                                    print_error("Please run the analysis first (deflection is auto-calculated)!")
+                                    time.sleep(2)
+                                    continue
+                                print_success("Opening 3D Deflection Contour (PyVista) ...")
+                                PyVista_deflection(
+                                    X_Field, Deflection, beam_length,
+                                    shape, section_dims, c, b, units=current_labels
+                                )
+
+                            elif pv_choice == '7':  # Combined
+                                print_success("Starting 3D FEA Combined Sequential Viewer (PyVista) ...")
+                                defl_data   = Deflection     if project_state.get("deflection_calculated", False) else None
+                                ss_data     = Shear_stress   if project_state.get("stress_calculated",     False) else None
+                                bs_data     = bending_stress if project_state.get("stress_calculated",     False) else None
+                                reac_data   = Reactions      if Reactions else None
+                                PyVista_combined(
+                                    X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
+                                    shape, section_dims, c, b,
+                                    Deflection=defl_data,
+                                    ShearStress=ss_data,
+                                    BendingStress=bs_data,
+                                    Reactions=reac_data,
+                                    units=current_labels
+                                )
+
+                            else:
+                                print_error("Invalid selection!")
+                                time.sleep(1)
+
+                        except Exception as e:
+                            print_error(f"Error in 3D FEA view: {e}")
+                            time.sleep(2)
+                            continue
 
 
 
@@ -1703,7 +1815,6 @@ def run_extended_menu():
             print_error("Invalid selection! Please try again.")
             time.sleep(1)
 
-display_engineering_recommendations
 
 def init():
     global project_state, current_unit_system, current_labels
