@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import os
 import sys
 import plotly.graph_objs as go
@@ -347,32 +347,30 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
     
     fig.update_xaxes(title={'text': f"Position along Beam ({u['length']})"}, showgrid=True, gridcolor='rgba(211,211,211,0.5)', mirror=True, linecolor='black', linewidth=1, row=num_rows, col=1)
     fig.update_yaxes(
-        title=dict(
-            text=f"Shear Force ({units['force']})",
-            exponentformat="power"   # <-- REMOVE FROM HERE
-        ),
+        title=dict(text=f"Shear Force ({units['force']})"),
+        exponentformat="power",
         row=1, col=1
     )
     fig.update_yaxes(
-    title=dict(text=f"Bending Moment ({units['moment']}·{units['length']})"),
-    exponentformat="power",  # <--- Moved outside the title dict
-    row=2, col=1
-)
+        title=dict(text=f"Bending Moment ({units['moment']}·{units['length']})"),
+        exponentformat="power",
+        row=2, col=1
+    )
     
     current_row = 3
     if Deflection is not None:
         fig.update_yaxes(
-    title=dict(text=f"Deflection ({units['length_small']})"),
-    exponentformat="power",  # <--- Moved outside the title dict
-    row=3, col=1
-)
+            title=dict(text=f"Deflection ({units['length_small']})"),
+            exponentformat="power",
+            row=3, col=1
+        )
         current_row += 1
     if ShearStress is not None:
         fig.update_yaxes(
-    title=dict(text=f"Shear Stress ({units['stress']})"),
-    exponentformat="power",  # <--- Moved outside the title dict
-    row=current_row, col=1
-)
+            title=dict(text=f"Shear Stress ({units['stress']})"),
+            exponentformat="power",
+            row=current_row, col=1
+        )
 
     
     fig.show()
