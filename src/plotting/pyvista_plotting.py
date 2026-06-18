@@ -33,11 +33,14 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # CONSTANTS & CONFIGURATION
 # ---------------------------------------------------------------------------
-_FEA_CMAP       = "jet"
-_N_COLORS       = 16                  # Discrete contour bands
-_BG_COLOR       = "white"             # Pure white for clean reporting
-_EDGE_COLOR     = "#808080"           # Faint grey for mesh wireframe
-_BEAM_COLOR     = "#E0E0E0"           # Neutral grey for schematic geometry
+# ---------------------------------------------------------------------------
+# CONSTANTS & CONFIGURATION
+# ---------------------------------------------------------------------------
+_FEA_CMAP       = "turbo"             # 'turbo' or 'jet' (classic ANSYS)
+_N_COLORS       = 15                  # 15 bands usually aligns text perfectly
+_BG_COLOR       = "white"             
+_EDGE_COLOR     = "black"             # Pure black for aggressive FEA wireframes
+_BEAM_COLOR     = "#A0A0A0"           # Darker grey for the undeformed/schematic geometry
 _SCREENSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "screenshots")
 
@@ -56,6 +59,32 @@ def _timestamp() -> str:
 def _make_screenshot_path(name: str) -> str:
     return os.path.join(_ensure_screenshot_dir(), f"{name}_{_timestamp()}.png")
 
+def _downsample_for_visuals(X_Field: np.ndarray, scalar_field: np.ndarray, target_fraction: float = 0.5):
+    """
+    Reduces the density of the mesh for visualization purposes only,
+    giving that chunky, discrete commercial FEA appearance.
+    """
+    n_original = len(X_Field)
+    if n_original < 10: 
+        return X_Field, scalar_field # Leave it alone if it's already a tiny mesh
+    
+    # Calculate the step size (e.g., target_fraction 0.5 = step of 2)
+    step = max(2, int(1.0 / target_fraction))
+    
+    # Slice the arrays to grab every Nth node
+    X_vis = X_Field[::step]
+    scalar_vis = scalar_field[::step]
+    
+    # Strictly ensure the very last node is included so the beam doesn't shrink
+    if X_vis[-1] != X_Field[-1]:
+        X_vis = np.append(X_vis, X_Field[-1])
+        # If it's a 2D array (like stress tensors), handle it safely
+        if scalar_field.ndim > 1:
+            scalar_vis = np.vstack([scalar_vis, scalar_field[-1]])
+        else:
+            scalar_vis = np.append(scalar_vis, scalar_field[-1])
+            
+    return X_vis, scalar_vis
 # ---------------------------------------------------------------------------
 # Cross-section polygon builders
 # ---------------------------------------------------------------------------
@@ -107,55 +136,117 @@ def _build_cross_section_polygon(shape: str, section_dims: dict, c: float, b: fl
     else:
         return _rect_polygon(H, W)
 
+
+def _apply_visual_scaling(plotter: pv.Plotter, beam_length: float, section_dim_max: float):
+    """Applies aggressive geometric scaling to thicken the cross-section."""
+    if section_dim_max <= 0: return
+
+    aspect_ratio = beam_length / section_dim_max
+    
+    # Increased scaling thresholds for a thicker beam
+    if aspect_ratio > 10.0:
+        scale_factor = min(aspect_ratio / 5.0, 8.0) # Doubled the thickness cap
+        plotter.set_scale(xscale=1.0, yscale=scale_factor, zscale=scale_factor)
+
+def _frame_camera(plotter: pv.Plotter, mesh: pv.PolyData):
+    """Forces an ANSYS-style isometric view with Y strictly UP."""
+    
+    # 1. Find the exact mathematical center of your beam
+    bounds = mesh.bounds
+    cx = (bounds[0] + bounds[1]) / 2.0
+    cy = (bounds[2] + bounds[3]) / 2.0
+    cz = (bounds[4] + bounds[5]) / 2.0
+    
+    # 2. Use the beam's length to calculate how far back the camera should sit
+    length = bounds[1] - bounds[0]
+    if length == 0: 
+        length = 1.0 # Fallback safety
+        
+    # 3. Explicitly define the camera: (Position, Focal Point, View Up)
+    # - Position: Positive X, Y, and Z stations the camera in the correct quadrant
+    # - Focal Point: Looking directly at the center of the beam
+    # - View Up: (0.0, 1.0, 0.0) absolutely forces the Y-axis to be vertical
+    plotter.camera_position = [
+        (cx + length * 0.6, cy + length * 0.5, cz + length * 0.8), 
+        (cx, cy, cz),                                  
+        (0.0, 1.0, 0.0)                                
+    ]
+    
+    plotter.camera.zoom(0.8)
+    
 # ---------------------------------------------------------------------------
 # Core Meshing Engine
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Core Meshing Engine (Phase 1 Update)
 # ---------------------------------------------------------------------------
 
 def _build_beam_mesh(
     X_Field: np.ndarray, scalar_field: np.ndarray, shape: str,
     section_dims: dict, c: float, b: float, scalar_name: str
 ) -> pv.PolyData:
-    """Builds the mesh, triangulates it, and subdivides for smooth FEA interpolation."""
+    """
+    Builds a clean, quad-based 3D mesh. 
+    Strictly avoids triangulation to maintain a commercial-grade wireframe.
+    """
     polygon = _build_cross_section_polygon(shape, section_dims, c, b)
-    n_pts, n_x = len(polygon), len(X_Field)
+    n_pts = len(polygon)
+    n_x = len(X_Field)
 
+    # 1. Initialize 3D points and scalar arrays
     pts = np.zeros((n_x * n_pts, 3))
     scalar_vals = np.zeros(n_x * n_pts)
 
+    # 2. Map the 2D cross-section along the X-axis nodes
     for i, x in enumerate(X_Field):
         start = i * n_pts
-        pts[start:start + n_pts, 0] = x
-        pts[start:start + n_pts, 1] = polygon[:, 0]
-        pts[start:start + n_pts, 2] = polygon[:, 1]
-        scalar_vals[start:start + n_pts] = scalar_field[i]
+        end = start + n_pts
+        pts[start:end, 0] = x                 # X coordinates
+        pts[start:end, 1] = polygon[:, 0]     # Y coordinates
+        pts[start:end, 2] = polygon[:, 1]     # Z coordinates
+        
+        # Apply the 1D solver value to the entire cross-section ring at this node
+        scalar_vals[start:end] = scalar_field[i]
 
+    # 3. Explicitly define Quad faces (No triangles!)
     faces = []
-    # Side quads
+    
+    # Generate the side walls (Longitudinal elements)
     for i in range(n_x - 1):
-        base_a, base_b = i * n_pts, (i + 1) * n_pts
+        base_current = i * n_pts
+        base_next = (i + 1) * n_pts
+        
         for j in range(n_pts):
             j_next = (j + 1) % n_pts
-            faces += [4, base_a + j, base_a + j_next, base_b + j_next, base_b + j]
+            
+            # Format: [Number of points in face, pt1, pt2, pt3, pt4]
+            # The '4' tells PyVista this is a strict Quad face.
+            faces.extend([
+                4, 
+                base_current + j,        # Bottom-left
+                base_next + j,           # Bottom-right
+                base_next + j_next,      # Top-right
+                base_current + j_next    # Top-left
+            ])
 
-    # End caps
-    for ring_start in [0, (n_x - 1) * n_pts]:
-        center_idx = len(pts)
-        ring_pts = pts[ring_start : ring_start + n_pts]
-        pts = np.vstack([pts, ring_pts.mean(axis=0)[np.newaxis, :]])
-        scalar_vals = np.append(scalar_vals, scalar_field[0 if ring_start == 0 else -1])
-        for j in range(n_pts):
-            faces += [3, center_idx, ring_start + j, ring_start + ((j + 1) % n_pts)]
+    # 4. Generate clean N-gon end caps (avoids center-point triangle fans)
+    # Start cap
+    start_cap = [n_pts] + [j for j in range(n_pts)]
+    faces.extend(start_cap)
+    
+    # End cap
+    end_cap = [n_pts] + [(n_x - 1) * n_pts + j for j in range(n_pts)]
+    faces.extend(end_cap)
 
+    # 5. Assemble the mesh
     mesh = pv.PolyData(pts, np.array(faces, dtype=int))
     mesh.point_data[scalar_name] = scalar_vals
     
-    # Crucial Step: Triangulate and subdivide to create proper FEA elements
-    mesh = mesh.triangulate()
-    if n_x < 50:  # Subdivide if the mesh is too coarse to look good
-        mesh = mesh.subdivide(1, subfilter='linear')
-        
-    return mesh
+    # NOTE: We specifically DO NOT call .triangulate() or .subdivide() here.
+    # The mesh is now purely structural.
 
+    return mesh
 # ---------------------------------------------------------------------------
 # UI & Plotter Factory
 # ---------------------------------------------------------------------------
@@ -185,21 +276,27 @@ def _add_fea_annotations(plotter, title: str, subtitle: str, max_val: float, min
     # Removed line_spacing argument to ensure compatibility across PyVista versions
     plotter.add_text(text_block, position="upper_left", font_size=10, 
                      color="black", font="arial")
-                     
+
 def _add_colorbar_mesh(plotter, mesh, scalar_name, label):
-    """Left-aligned, discrete colorband legend."""
+    """Left-aligned, discrete colorband legend with flat, accurate lighting."""
+    
+    # NEW: Add a newline character to force physical spacing below the title
+    padded_title = f"{label}\n "
+    
+    # Format the colorbar to mimic enterprise FEA legends
     sargs = dict(
-        title=label,
-        title_font_size=12,
-        label_font_size=10,
-        n_labels=9,
-        fmt="%.2f",
-        color="black",
+        title=padded_title,      # <-- Use the padded title here
+        title_font_size=14,
+        label_font_size=12,
+        shadow=False,
+        n_labels=_N_COLORS + 1,  
+        fmt="%.3f",              
         font_family="arial",
-        position_x=0.05,       # Moved to the left side
-        position_y=0.15,
-        height=0.7,
-        width=0.06,
+        color="black",
+        position_x=0.03,         
+        position_y=0.05,         
+        height=0.80,             
+        width=0.06,              
         vertical=True
     )
     
@@ -207,13 +304,13 @@ def _add_colorbar_mesh(plotter, mesh, scalar_name, label):
         mesh,
         scalars=scalar_name,
         cmap=_FEA_CMAP,
-        n_colors=_N_COLORS,    # Creates discrete FEA color bands
-        show_edges=True,       # Overlay the wireframe mesh
+        n_colors=_N_COLORS,    
+        show_edges=True,       
         edge_color=_EDGE_COLOR,
-        line_width=0.5,
-        ambient=0.4,           # Matte lighting (no glossy specular)
-        diffuse=0.8,
-        specular=0.0,
+        line_width=1.5,        
+        ambient=0.6,           
+        diffuse=0.4,           
+        specular=0.0,          
         scalar_bar_args=sargs,
     )
 
@@ -289,15 +386,29 @@ def PyVista_shear_stress(X_Field, ShearStress, beam_length, shape, section_dims,
     units = units or {"length": "m", "stress": "MPa"}
     l_div, s_div = get_divisor(units, "length"), get_divisor(units, "stress")
     ss = np.max(np.abs(ShearStress), axis=1) if ShearStress.ndim > 1 else np.abs(ShearStress)
-    X, SS = X_Field / l_div, ss / s_div
+    
+    X = X_Field / l_div
+    SS = ss / s_div
+    draw_length = beam_length / l_div
+    draw_c = c / l_div
+    draw_b = b / l_div
 
-    mesh = _build_beam_mesh(X, SS, shape, section_dims, c/l_div, b/l_div, "ShearStress")
+    # --- NEW: Halve the elements for the visualizer ---
+    X_vis, SS_vis = _downsample_for_visuals(X, SS, target_fraction=0.2)
+
+    # Pass the downsampled arrays to the mesher``
+    mesh = _build_beam_mesh(X_vis, SS_vis, shape, section_dims, draw_c, draw_b, "ShearStress")
     
     pl = _make_plotter()
     _add_fea_annotations(pl, "Shear Stress (Element-Nodal)", "", np.max(SS), np.min(SS), units['stress'])
     _add_colorbar_mesh(pl, mesh, "ShearStress", f"Shear Stress ({units['stress']})")
     
-    pl.camera_position = "iso"
+    # Apply new scaling and camera lock
+    max_dim = max(draw_c * 2, draw_b)  
+    _apply_visual_scaling(pl, draw_length, max_dim)
+    _frame_camera(pl, mesh)
+    
+    # Remove any old 'pl.camera_position = "iso"' calls down here
     pl.show(screenshot=_make_screenshot_path("shear_stress"))
 
 # ---------------------------------------------------------------------------
