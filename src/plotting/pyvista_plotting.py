@@ -314,20 +314,60 @@ def _add_colorbar_mesh(plotter, mesh, scalar_name, label):
         scalar_bar_args=sargs,
     )
 
-def _add_support_glyphs(plotter, reactions, l_div, f_div, m_div):
-    """Cleaned up reaction arrows."""
+def _add_support_glyphs(plotter, reactions, l_div, f_div, m_div, visual_beam_length):
+    """Cleaned up reaction arrows normalized to model size."""
+    
+    # 1. Find the maximum absolute force to normalize arrow sizes
+    max_f = 1e-9
+    for r in reactions:
+        max_f = max(max_f, abs(r.get("Fy", 0.0) / f_div), abs(r.get("Fx", 0.0) / f_div))
+        
+    # 2. Target max arrow length (set to 15% of the beam's visual length)
+    base_length = visual_beam_length if visual_beam_length > 0 else 1.0
+    max_arrow_size = base_length * 0.15 
+    
+    # 3. Scale factor converts force magnitude to visual length
+    scale_factor = max_arrow_size / max_f
+    
     for r in reactions:
         x = r["pos"] / l_div
         Fy, Fx = r.get("Fy", 0.0) / f_div, r.get("Fx", 0.0) / f_div
-        origin = np.array([[x, 0.0, 0.0]])
 
+        # Draw Y-Reaction
         if abs(Fy) > 1e-9:
-            mag = abs(Fy)
-            plotter.add_arrows(origin, np.array([[0.0, np.sign(Fy), 0.0]]), mag=mag*0.2, color="blue")
-            plotter.add_point_labels(origin, [f"Fy={Fy:.2f}"], font_size=10, text_color="black", show_points=False)
-        if abs(Fx) > 1e-9:
-            plotter.add_arrows(origin, np.array([[np.sign(Fx), 0.0, 0.0]]), mag=abs(Fx)*0.2, color="red")
+            visual_mag = abs(Fy) * scale_factor
+            direction_sign = np.sign(Fy)
+            
+            # ANSYS Style: Arrow tip touches the node (tail originates outside)
+            start_y = -direction_sign * visual_mag
+            origin = np.array([[x, start_y, 0.0]])
+            direction = np.array([[0.0, direction_sign, 0.0]])
+            
+            plotter.add_arrows(origin, direction, mag=visual_mag, color="red")
+            
+            # Place label slightly offset from the tail of the arrow
+            label_y = start_y - (direction_sign * base_length * 0.03)
+            label_pos = np.array([[x, label_y, 0.0]])
+            plotter.add_point_labels(label_pos, [f"Fy = {Fy:.2f}"], font_size=10, 
+                                     text_color="black", show_points=False)
 
+        # Draw X-Reaction
+        if abs(Fx) > 1e-9:
+            visual_mag = abs(Fx) * scale_factor
+            direction_sign = np.sign(Fx)
+            
+            # ANSYS Style: Arrow tip touches the node
+            start_x = x - (direction_sign * visual_mag)
+            origin = np.array([[start_x, 0.0, 0.0]])
+            direction = np.array([[direction_sign, 0.0, 0.0]])
+            
+            plotter.add_arrows(origin, direction, mag=visual_mag, color="blue")
+            
+            # Place label slightly offset from the tail of the arrow
+            label_x = start_x - (direction_sign * base_length * 0.03)
+            label_pos = np.array([[label_x, 0.0, 0.0]])
+            plotter.add_point_labels(label_pos, [f"Fx = {Fx:.2f}"], font_size=10, 
+                                     text_color="black", show_points=False)
 # ===========================================================================
 # PUBLIC FUNCTIONS
 # ===========================================================================
@@ -343,25 +383,39 @@ def PyVista_reactions_schematic(beam_length, Reactions, shape, section_dims, c, 
     _add_fea_annotations(pl, "Free Body Diagram", "Reaction Forces", 0, 0, units['force'])
     
     pl.add_mesh(mesh, color=_BEAM_COLOR, opacity=0.8, show_edges=True, edge_color=_EDGE_COLOR, line_width=0.5)
-    _add_support_glyphs(pl, Reactions, l_div, f_div, m_div)
+    
+    # Calculate visual beam length and pass it to the updated glyph function
+    visual_beam_length = beam_length / l_div
+    _add_support_glyphs(pl, Reactions, l_div, f_div, m_div, visual_beam_length)
     
     pl.camera_position = "iso"
     pl.show(screenshot=_make_screenshot_path("reactions_schematic"))
+    
 
 # ---------------------------------------------------------------------------
 
 def PyVista_shear_force(X_Field, Total_ShearForce, beam_length, shape, section_dims, c, b, units=None):
     units = units or {"length": "m", "force": "N"}
     l_div, f_div = get_divisor(units, "length"), get_divisor(units, "force")
+    
+    # Calculate drawing dimensions
     X, SF = X_Field / l_div, Total_ShearForce / f_div
+    draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
 
-    mesh = _build_beam_mesh(X, SF, shape, section_dims, c/l_div, b/l_div, "ShearForce")
+    # Downsample for visual styling
+    X_vis, SF_vis = _downsample_for_visuals(X, SF, target_fraction=0.2)
+
+    mesh = _build_beam_mesh(X_vis, SF_vis, shape, section_dims, draw_c, draw_b, "ShearForce")
     
     pl = _make_plotter()
     _add_fea_annotations(pl, "Shear Force (Element-Nodal)", "", np.max(SF), np.min(SF), units['force'])
     _add_colorbar_mesh(pl, mesh, "ShearForce", f"Shear Force ({units['force']})")
     
-    pl.camera_position = "iso"
+    # Apply standard scaling and camera lock
+    max_dim = max(draw_c * 2, draw_b)
+    _apply_visual_scaling(pl, draw_length, max_dim)
+    _frame_camera(pl, mesh)
+    
     pl.show(screenshot=_make_screenshot_path("shear_force"))
 
 # ---------------------------------------------------------------------------
@@ -369,15 +423,25 @@ def PyVista_shear_force(X_Field, Total_ShearForce, beam_length, shape, section_d
 def PyVista_bending_moment(X_Field, Total_BendingMoment, beam_length, shape, section_dims, c, b, units=None):
     units = units or {"length": "m", "moment": "N·m"}
     l_div, m_div = get_divisor(units, "length"), get_divisor(units, "moment")
+    
+    # Calculate drawing dimensions
     X, BM = X_Field / l_div, Total_BendingMoment / m_div
+    draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
 
-    mesh = _build_beam_mesh(X, BM, shape, section_dims, c/l_div, b/l_div, "BendingMoment")
+    # Downsample for visual styling
+    X_vis, BM_vis = _downsample_for_visuals(X, BM, target_fraction=0.2)
+
+    mesh = _build_beam_mesh(X_vis, BM_vis, shape, section_dims, draw_c, draw_b, "BendingMoment")
     
     pl = _make_plotter()
     _add_fea_annotations(pl, "Bending Moment (Element-Nodal)", "", np.max(BM), np.min(BM), units['moment'])
     _add_colorbar_mesh(pl, mesh, "BendingMoment", f"Bending Moment ({units['moment']})")
     
-    pl.camera_position = "iso"
+    # Apply standard scaling and camera lock
+    max_dim = max(draw_c * 2, draw_b)
+    _apply_visual_scaling(pl, draw_length, max_dim)
+    _frame_camera(pl, mesh)
+    
     pl.show(screenshot=_make_screenshot_path("bending_moment"))
 
 # ---------------------------------------------------------------------------
@@ -416,16 +480,26 @@ def PyVista_shear_stress(X_Field, ShearStress, beam_length, shape, section_dims,
 def PyVista_bending_stress(X_Field, BendingStress, beam_length, shape, section_dims, c, b, units=None):
     units = units or {"length": "m", "stress": "MPa"}
     l_div, s_div = get_divisor(units, "length"), get_divisor(units, "stress")
-    bs = np.max(np.abs(BendingStress), axis=1) if BendingStress.ndim > 1 else BendingStress
+    bs = np.max(np.abs(BendingStress), axis=1) if BendingStress.ndim > 1 else np.abs(BendingStress)
+    
+    # Calculate drawing dimensions
     X, BS = X_Field / l_div, bs / s_div
+    draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
 
-    mesh = _build_beam_mesh(X, BS, shape, section_dims, c/l_div, b/l_div, "BendingStress")
+    # Downsample for visual styling
+    X_vis, BS_vis = _downsample_for_visuals(X, BS, target_fraction=0.2)
+
+    mesh = _build_beam_mesh(X_vis, BS_vis, shape, section_dims, draw_c, draw_b, "BendingStress")
     
     pl = _make_plotter()
     _add_fea_annotations(pl, "Bending Stress (Element-Nodal)", "", np.max(BS), np.min(BS), units['stress'])
     _add_colorbar_mesh(pl, mesh, "BendingStress", f"Bending Stress ({units['stress']})")
     
-    pl.camera_position = "iso"
+    # Apply standard scaling and camera lock
+    max_dim = max(draw_c * 2, draw_b)
+    _apply_visual_scaling(pl, draw_length, max_dim)
+    _frame_camera(pl, mesh)
+    
     pl.show(screenshot=_make_screenshot_path("bending_stress"))
 
 # ---------------------------------------------------------------------------
@@ -434,8 +508,12 @@ def PyVista_deflection(X_Field, Deflection, beam_length, shape, section_dims, c,
     units = units or {"length": "m", "length_small": "mm"}
     l_div, ls_div = get_divisor(units, "length"), get_divisor(units, "length_small")
     X, defl = X_Field / l_div, Deflection / ls_div
+    X_full = X_Field / l_div
+    defl_full = Deflection / ls_div
 
-    max_defl = float(np.max(np.abs(defl)))
+    # 1. DOWN SAMPLE the mesh so the wireframe doesn't swallow the colors!
+    X, defl = _downsample_for_visuals(X_full, defl_full, target_fraction=0.1)
+    max_defl = float(np.max(np.abs(defl_full)))
     visual_scale = min(((c / l_div) * 6.0) / max_defl, 50.0) if max_defl > 0 else 1.0
     defl_visual = defl * visual_scale
 
@@ -473,7 +551,11 @@ def PyVista_deflection(X_Field, Deflection, beam_length, shape, section_dims, c,
     ref_mesh = _build_beam_mesh(X, np.zeros(len(X)), shape, section_dims, c/l_div, b/l_div, "Ref")
     pl.add_mesh(ref_mesh, color="white", opacity=0.1, show_edges=True, edge_color="#D3D3D3")
     
-    pl.camera_position = "iso"
+    # Apply standard scaling and camera lock
+    draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
+    max_dim = max(draw_c * 2, draw_b)
+    _apply_visual_scaling(pl, draw_length, max_dim)
+    _frame_camera(pl, mesh)
     pl.show(screenshot=_make_screenshot_path("deflection"))
 
 # ---------------------------------------------------------------------------
