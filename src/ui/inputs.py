@@ -78,7 +78,10 @@ def Beam_Classification():
     # Option 6: Continuous Beam (Multi-span Indeterminate)
     print(colored("│ 6 - Continuous Beam (Multi-span)", 'yellow', attrs=['bold']))
     print(colored("│    Visual:  △ ──────── ◯ ──────── ◯ ──────── ◯", 'white'))
-    
+
+    # Option 7: Custom Beam (User-Defined Supports)   
+    print(colored("│ 7 - Custom Beam (User-Defined Supports)", 'yellow', attrs=['bold']))
+    print(colored("│    Visual:  ? ─────── ? ─────── ? ─────── ?", 'white'))   
     print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
     
     print("\n")
@@ -97,8 +100,10 @@ def Beam_Classification():
         return "Propped"
     elif classification == '6':
         return "Continuous"
+    elif classification == '7':     
+        return "Custom"
     else:
-        print_error("Invalid selection! Please choose a number between 1 and 6.")
+        print_error("Invalid selection! Please choose a number between 1 and 7.")
         time.sleep(1.5)
         return Beam_Classification()
 
@@ -211,7 +216,102 @@ def define_continuous_supports(beam_length, unit_system="Metric", units=None):
         except ValueError:
             print_error("Invalid input. Please enter valid numeric digits.")
             time.sleep(1.5)
-#==============================
+#=====================================================================================
+def define_custom_supports(beam_length, unit_system="Metric", units=None):
+    """Interactive wizard for defining arbitrary support configurations."""
+    if units is None: units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
+    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    inv_multiplier = 1.0 / multiplier
+    
+    while True:
+        clear_screen()
+        print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+        print(colored("║                CUSTOM BEAM SUPPORTS                          ║", 'cyan', attrs=['bold']))
+        print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+        print("\n")
+        
+        try:
+            num_supports = int(input(colored("Enter total number of supports: ➔ ", 'cyan')))
+            if num_supports < 2:
+                print(colored("Warning: A beam with fewer than 2 supports may be unstable unless fully fixed.", 'yellow'))
+                
+            supports = []
+            has_x_restraint = False
+            has_y_restraint = False
+            
+            for i in range(num_supports):
+                print(colored(f"\n--- Defining Support {i+1} ---", 'yellow', attrs=['bold']))
+                
+                # 1. Get Position
+                while True:
+                    pos_raw = float(input(colored(f"Enter position ({units['length']}): ➔ ", 'cyan')))
+                    pos = pos_raw * multiplier
+                    
+                    if pos < 0 or pos > beam_length:
+                        print_error("Support position must be between 0 and beam length.")
+                        continue
+                    if any(abs(s["pos"] - pos) < 1e-5 for s in supports):
+                        print_error("A support already exists at this location.")
+                        continue
+                    break
+                    
+                # 2. Get DOF
+                print(colored("Support Types:", 'green'))
+                print(colored("  [1] Pin          — Restrains X and Y (Free rotation)", 'white'))
+                print(colored("  [2] Roller       — Restrains Y only", 'white'))
+                print(colored("  [3] Fixed        — Restrains all (X, Y, Moment)", 'white'))
+                print(colored("  [4] Vertical Spring — Restrains Y elastically", 'white'))
+                print(colored("  [5] Horizontal Spring — Restrains X elastically", 'white'))
+                
+                while True:
+                    s_type = input(colored("Choose support type [1-5]: ➔ ", 'cyan'))
+                    dof = (0, 0, 0)
+                    ky, kx = None, None
+                    
+                    if s_type == '1':
+                        dof = (1, 1, 0)
+                        has_x_restraint, has_y_restraint = True, True
+                    elif s_type == '2':
+                        dof = (0, 1, 0)
+                        has_y_restraint = True
+                    elif s_type == '3':
+                        dof = (1, 1, 1)
+                        has_x_restraint, has_y_restraint = True, True
+                    elif s_type == '4':
+                        dof = (0, 1, 0)
+                        ky_raw = float(input(colored(f"Enter vertical spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
+                        ky = ky_raw * (CONVERSION_TO_SI[unit_system]["force"] / multiplier)
+                        has_y_restraint = True
+                    elif s_type == '5':
+                        dof = (1, 0, 0)
+                        kx_raw = float(input(colored(f"Enter horizontal spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
+                        kx = kx_raw * (CONVERSION_TO_SI[unit_system]["force"] / multiplier)
+                        has_x_restraint = True
+                    else:
+                        print_error("Invalid choice.")
+                        continue
+                    break
+                    
+                supports.append({"pos": pos, "dof": dof, "ky": ky, "kx": kx})
+                
+            # Validations
+            if not has_y_restraint:
+                print_error("Beam has no vertical restraint! It will fail to solve. Please re-enter.")
+                time.sleep(2.5)
+                continue
+            if not has_x_restraint:
+                print(colored("Warning: Beam has no horizontal restraint. It may be horizontally unstable.", 'red'))
+                time.sleep(2.5)
+                
+            supports.sort(key=lambda x: x["pos"])
+            print_success(f"\nSuccessfully configured {len(supports)} custom supports!")
+            time.sleep(1.5)
+            return supports
+            
+        except ValueError:
+            print_error("Invalid input. Please enter valid numeric digits.")
+            time.sleep(1.5)
+#==================================================================================
 def manage_loads(unit_system="Metric", units=None):
     if units is None:
         units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
@@ -585,3 +685,82 @@ def manage_loads(unit_system="Metric", units=None):
             time.sleep(2)
     
     return loads
+#--------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+def get_solver_resolution():
+    """
+    Prompt the user to enter a custom solver resolution between 201 and 10001.
+    """
+    while True:
+        try:
+            pts = int(input(colored("Enter custom resolution (201 - 10001): ➔ ", 'cyan')))
+            if 201 <= pts <= 10001:
+                return pts
+            else:
+                print_error("Value must be between 201 and 10001.")
+        except ValueError:
+            print_error("Invalid input. Please enter an integer.")
+#--------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------
+def define_custom_material(unit_system="Metric", units=None):
+    """Interactive wizard to create a custom material entry."""
+    if units is None: units = {'density': 'kg/m³', 'stress': 'MPa', 'modulus': 'GPa'}
+    clear_screen()
+    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+    print(colored("║               DEFINE CUSTOM MATERIAL                         ║", 'cyan', attrs=['bold']))
+    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    print("\n")
+    
+    try:
+        name = input(colored("Enter Material Name: ➔ ", 'cyan')).strip()
+        if not name:
+            print_error("Name cannot be empty.")
+            time.sleep(1.5)
+            return None
+
+        is_imperial = (unit_system == "Imperial")
+        
+        # Inputs in active units, converted to JSON base schema (kg/m³, MPa, GPa)
+        dens_val = float(input(colored(f"Enter Density ({units['density']}): ➔ ", 'cyan')))
+        json_dens = dens_val * 16.01846 if is_imperial else dens_val
+        
+        yield_val = float(input(colored(f"Enter Yield Strength ({units['stress']}): ➔ ", 'cyan')))
+        json_yield = yield_val * 6.894757 if is_imperial else yield_val
+        
+        ult_val = float(input(colored(f"Enter Ultimate Strength ({units['stress']}): ➔ ", 'cyan')))
+        json_ult = ult_val * 6.894757 if is_imperial else ult_val
+        
+        if json_yield >= json_ult:
+            print_error("Yield Strength must be less than Ultimate Strength.")
+            time.sleep(2)
+            return None
+            
+        mod_val = float(input(colored(f"Enter Elastic Modulus ({units['modulus']}): ➔ ", 'cyan')))
+        json_mod = mod_val * 0.006894757 if is_imperial else mod_val
+        
+        poisson = float(input(colored("Enter Poisson's Ratio (e.g., 0.3): ➔ ", 'cyan')))
+        if not (0.0 < poisson < 0.5):
+            print_error("Poisson's Ratio must be between 0 and 0.5.")
+            time.sleep(2)
+            return None
+            
+        therm = float(input(colored("Enter Thermal Expansion Coefficient (1/°C) [e.g., 1.2e-5, or 0 to skip]: ➔ ", 'cyan')))
+        desc = input(colored("Enter a short description: ➔ ", 'cyan')).strip()
+        
+        material_dict = {
+            "Material": name,
+            "Density": round(json_dens, 2),
+            "Yield Strength": round(json_yield, 2),
+            "Ultimate Strength": round(json_ult, 2),
+            "Elastic Modulus": round(json_mod, 2),
+            "Poisson Ratio": round(poisson, 3),
+            "Thermal Expansion": therm if therm != 0 else 0,
+            "Description": desc
+        }
+        
+        return material_dict
+        
+    except ValueError:
+        print_error("Invalid numeric input. Material creation aborted.")
+        time.sleep(2)
+        return None

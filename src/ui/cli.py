@@ -28,7 +28,7 @@ if src_dir not in sys.path:
 
     
 # Application modules
-
+from database.sections_database import SectionsDatabase
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
 from solver.indeterminate_solver import solve_beam
 from solver import moi_solver
@@ -55,8 +55,8 @@ from solver.stress_solver import (calculate_beam_deflection,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor)
-from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_continuous_supports
+                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library)
+from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification,define_continuous_supports,get_solver_resolution,define_custom_material,define_custom_supports
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -86,6 +86,7 @@ current_labels = METRIC_LABELS  # <-- Tracks active dictionary
 beam_storage = []      # List to hold all saved projects
 current_project = None # Dictionary holding the currently loaded project
 Materials = None       # Placeholder for the materials database object
+SectionsDB = None
 current_unit_system = 'SI'  # Units System
 beam_length = 0.0
 A = 0.0
@@ -108,6 +109,7 @@ y_array = np.array([])
 section_dims = {}
 support_types = ("pin", "roller")  # BUG-10 FIX: module-level default; overwritten on load/save
 beam_type = None  # BUG-05 FIX: initialise at module level to prevent NameError
+num_points = 2001
 supports_list = []  # NEW: Used for Continuous multi-span beams
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
 Deflection = None
@@ -134,6 +136,7 @@ def New_Project():
     current_project = None  # Reset current project data
     beam_type = None        # BUG-05 FIX: reset beam_type so menu guards work correctly
     support_types = ("pin", "roller")  # BUG-10 FIX: reset to safe default
+    num_points = 2001
     current_unit_system = "Metric"        # <-- RESET UNITS
     current_labels = METRIC_LABELS
     # Reset project state flags
@@ -253,6 +256,7 @@ def load_project():
             support_types = ("fixed",)
         else:
             support_types = ("pin", "roller")
+        num_points = current_project.get('num_points', 2001)
 
         # Load analysis data
         X_Field = np.array(current_project.get('X_Field', []))
@@ -504,6 +508,7 @@ def save_project():
         'support_A_type': A_type,
         'support_B_type': B_type,
         'support_types': list(support_types),  # BUG-10 FIX: persist support_types to JSON
+        'num_points': num_points,
         'X_Field': safe_serialize(X_Field),
         'Total_ShearForce': safe_serialize(Total_ShearForce),
         'Total_BendingMoment': safe_serialize(Total_BendingMoment),
@@ -592,7 +597,7 @@ def select_material(unit_system="Metric", units=None):
         print_error("Materials database is not loaded!")
         return None
 
-    materials_list = Materials.materials
+    materials_list = Materials.all_materials 
     
     clear_screen()
     print("\n")
@@ -617,10 +622,24 @@ def select_material(unit_system="Metric", units=None):
     print(colored(units_str, 'white'))
     print(separator)
     
+    has_shown_custom_header = False
     # Print each material with dynamically converted properties
     for index, material in enumerate(materials_list):
-        mat_num = colored(f"{index + 1:3d} │", 'light_yellow')
-        mat_name = colored(f" {material['Material']:<34} │", 'light_yellow')
+        is_custom = material.get("is_custom", False)
+        
+        # Inject the separator before the first custom item
+        if is_custom and not has_shown_custom_header:
+            print(separator)
+            print(colored("    │ ── USER-DEFINED MATERIALS ──────── │", 'yellow', attrs=['bold']))
+            print(separator)
+            has_shown_custom_header = True
+
+        if is_custom:
+            mat_num = colored(f"{index + 1:3d} │", 'yellow', attrs=['bold'])
+            mat_name = colored(f" {material['Material']:<28} [CUSTOM] │", 'yellow', attrs=['bold'])
+        else:
+            mat_num = colored(f"{index + 1:3d} │", 'light_yellow')
+            mat_name = colored(f" {material['Material']:<34} │", 'light_yellow')
         
         # 1. Pull raw JSON metric data
         # 2. Multiply to get Base SI (Pa, kg/m³)
@@ -781,14 +800,17 @@ def run_extended_menu():
     global Ix, shape, c, b, y_array, section_dims
     global selected_material, density, yield_strength, ultimate_strength, elastic_modulus, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads, loads
-    global support_types
+    global support_types, supports_list
     global beam_type  # Ensure we can access the beam_type variable
-
+    num_points = 2001
     load_material_database()
     load_projects_from_disk()
-
+    
+    global SectionsDB           # <--- NEW
+    SectionsDB = SectionsDatabase() # <--- NEW
+    
     while True:
-        selection = main_menu_template()
+        selection = main_menu_template(num_points)
 
         # Validate selection based on beam_type status
         if selection in ['3', '4', '5', '6', '7', '8', '9', '10'] and beam_type is None:
@@ -803,6 +825,8 @@ def run_extended_menu():
             print(colored("Valid beam types:", 'cyan'))
             print(colored("• Simple Supported Beam", 'white'))
             print(colored("• Cantilever Beam", 'white'))
+            print(colored("• Continuous Beam", 'white'))
+            print(colored("• Custom Beam", 'white'))  # <--- NEW
             print("\n")
             input(colored("Press Enter to return to the main menu...", 'cyan', attrs=['bold']))
             continue
@@ -837,14 +861,13 @@ def run_extended_menu():
         elif selection == '2':  # Define Beam Type
             while True:
                 beam_type = Beam_Classification()
-                if beam_type in ["Simple", "Cantilever", "Fixed-Fixed", "Propped", "Continuous","Overhanging Beam"]:
+                if beam_type in ["Simple", "Cantilever", "Fixed-Fixed", "Propped", "Continuous", "Overhanging Beam", "Custom"]:
                     # Automatically fulfill the supports gate logic for fixed boundary types
                     if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
                         project_state["supports_saved"] = True
-                    elif beam_type == "Continuous" or beam_type:
+                    elif beam_type in ("Continuous", "Overhanging Beam", "Custom"):
                         project_state["supports_saved"] = False
-                    elif beam_type== "Overhanging Beam":
-                        project_state["supports_saved"] = False
+                   
                     # Update beam_type in current_project if it exists
                     if current_project is not None:
                         current_project["beam_type"] = beam_type
@@ -898,64 +921,156 @@ def run_extended_menu():
                         if confirmation.lower() != 'y':
                             continue
                             
-                    clear_screen()
-                    profile_choice = choose_profile()
-                    print("")
-                    
-                    # Moment of Inertia (MOI) Solver
-                    if beam_type is None:
-                        cprint("----------------------------------------------","white")
-                        print_error("Note: Please define beam type !!!!")
-                        cprint("----------------------------------------------","white")
-                        print("")
-                        
-                    if profile_choice == '1':
-                        result = moi_solver.inertia_moment_ibeam(units=current_labels)
-                    elif profile_choice == '2':
-                        result = moi_solver.inertia_moment_tbeam(units=current_labels)
-                    elif profile_choice == '3':
-                        result = moi_solver.inertia_moment_circle(units=current_labels)
-                    elif profile_choice == '4':
-                        result = moi_solver.inertia_moment_hollow_circle(units=current_labels)
-                    elif profile_choice == '5':
-                        result = moi_solver.inertia_moment_square(units=current_labels)
-                    elif profile_choice == '6':
-                        result = moi_solver.inertia_moment_hollow_square(units=current_labels)
-                    elif profile_choice == '7':
-                        result = moi_solver.inertia_moment_rectangle(units=current_labels)
-                    elif profile_choice == '8':
-                        result = moi_solver.inertia_moment_hollow_rectangle(units=current_labels)
-                    else:
-                        print_error("Invalid choice! Please try again.")
-                        continue
-                        
-                    # Catch the error! If result is None, the user entered bad data.
-                    # 'continue' loops back to let them try again without crashing.
-                    if result is None:
-                        print_error("Please try again!!!")
-                        time.sleep(2.5)
-                        continue
-                        
-                    # If we made it here, the data is good. Safely unpack the 6 variables.
-                    Ix, shape, c, b, y_array, section_dims = result
-                        
-                    project_state["profile_saved"] = True
-                    project_state["has_unsaved_changes"] = True
-                    print_success("Profile defined successfully!")
-                    time.sleep(2)
-                    
+                    while True:
+                        src_choice = profile_source_menu()
+                        if src_choice == '6':  # Back
+                            break
+                            
+                        elif src_choice == '1':  # Manual Dimension Entry
+                            clear_screen()
+                            profile_choice = choose_profile()
+                            print("")
+                            
+                            if beam_type is None:
+                                cprint("----------------------------------------------", "white")
+                                print_error("Note: Please define beam type !!!!")
+                                cprint("----------------------------------------------", "white")
+                                print("")
+                                
+                            if profile_choice == '1': result = moi_solver.inertia_moment_ibeam(units=current_labels)
+                            elif profile_choice == '2': result = moi_solver.inertia_moment_tbeam(units=current_labels)
+                            elif profile_choice == '3': result = moi_solver.inertia_moment_circle(units=current_labels)
+                            elif profile_choice == '4': result = moi_solver.inertia_moment_hollow_circle(units=current_labels)
+                            elif profile_choice == '5': result = moi_solver.inertia_moment_square(units=current_labels)
+                            elif profile_choice == '6': result = moi_solver.inertia_moment_hollow_square(units=current_labels)
+                            elif profile_choice == '7': result = moi_solver.inertia_moment_rectangle(units=current_labels)
+                            elif profile_choice == '8': result = moi_solver.inertia_moment_hollow_rectangle(units=current_labels)
+                            else:
+                                print_error("Invalid choice! Please try again.")
+                                continue
+                                
+                            if result is None:
+                                print_error("Please try again!!!")
+                                time.sleep(2.5)
+                                continue
+                                
+                            Ix, shape, c, b, y_array, section_dims = result
+                            project_state["profile_saved"] = True
+                            project_state["has_unsaved_changes"] = True
+                            print_success("Profile defined successfully!")
+                            time.sleep(2)
+                            break
+                            
+                        elif src_choice == '2':  # Standard Library
+                            families = SectionsDB.get_standard_families()
+                            if not families:
+                                print_error("Standard library is empty or missing.")
+                                time.sleep(2)
+                                continue
+                                
+                            clear_screen()
+                            print_title("STANDARD SECTION FAMILIES")
+                            for i, fam in enumerate(families, 1):
+                                print_option(f"  {i}. {fam}")
+                            print_option(f"  0. Back")
+                            print("")
+                            
+                            try:
+                                fam_idx = int(input(colored("Choose a family ➔ ", 'cyan')))
+                                if fam_idx == 0: continue
+                                selected_family = families[fam_idx - 1]
+                                sections_in_fam = SectionsDB.get_sections_in_family(selected_family)
+                                
+                                sec_idx = display_section_library(sections_in_fam, title=f"{selected_family} Sections", is_custom=False)
+                                if sec_idx is not None:
+                                    entry = sections_in_fam[sec_idx]
+                                    result = moi_solver.load_section_from_library(entry)
+                                    if result:
+                                        Ix, shape, c, b, y_array, section_dims = result
+                                        project_state["profile_saved"] = True
+                                        project_state["has_unsaved_changes"] = True
+                                        print_success(f"Loaded {entry['name']} successfully!")
+                                        time.sleep(2)
+                                        break
+                                    else:
+                                        print_error("Failed to parse section data.")
+                                        time.sleep(2)
+                            except (ValueError, IndexError):
+                                print_error("Invalid selection.")
+                                time.sleep(1)
+                                
+                        elif src_choice == '3':  # My Saved Sections
+                            custom_secs = SectionsDB.list_custom_sections()
+                            sec_idx = display_section_library(custom_secs, title="MY SAVED SECTIONS", is_custom=True)
+                            if sec_idx is not None:
+                                entry = custom_secs[sec_idx]
+                                result = moi_solver.load_section_from_library(entry)
+                                if result:
+                                    Ix, shape, c, b, y_array, section_dims = result
+                                    project_state["profile_saved"] = True
+                                    project_state["has_unsaved_changes"] = True
+                                    print_success(f"Loaded {entry['name']} successfully!")
+                                    time.sleep(2)
+                                    break
+                                else:
+                                    print_error("Failed to parse section data.")
+                                    time.sleep(2)
+                                    
+                        elif src_choice == '4':  # Save Current Section
+                            if not project_state["profile_saved"]:
+                                print_error("No active profile to save. Please define one first.")
+                                time.sleep(2)
+                                continue
+                                
+                            custom_name = input(colored("Enter a name for this custom section ➔ ", 'cyan')).strip()
+                            if not custom_name:
+                                print_error("Name cannot be empty.")
+                                time.sleep(1)
+                                continue
+                                
+                            sec_dict = {
+                                "name": custom_name,
+                                "shape": shape,
+                                "Ix": Ix,
+                                "c": c,
+                                "b": b,
+                                "section_dims": section_dims
+                            }
+                            SectionsDB.save_custom_section(sec_dict)
+                            print_success(f"Section '{custom_name}' saved successfully!")
+                            time.sleep(2)
+
+                                    
+                        elif src_choice == '5':  # Delete Custom Section
+                            custom_secs = SectionsDB.list_custom_sections()
+                            if not custom_secs:
+                                print_error("No custom sections available to delete.")
+                                time.sleep(2)
+                                continue
+                                
+                            sec_idx = display_section_library(custom_secs, title="DELETE CUSTOM SECTION", is_custom=True)
+                            if sec_idx is not None:
+                                entry = custom_secs[sec_idx]
+                                sec_name = entry["name"]
+                                confirm = input(colored(f"Are you sure you want to delete '{sec_name}'? (Y/N): ", 'cyan'))
+                                if confirm.lower() == 'y':
+                                    SectionsDB.delete_custom_section(sec_name)
+                                    print_success(f"Deleted section '{sec_name}'.")
+                                time.sleep(2)
+
+
                 elif sub_choice == '3':  # View profile info
                     if not project_state["profile_saved"] and not shape:
                         print_error("No profile defined yet!")
                         time.sleep(2)
                         continue
                         
-                    display_profile_info(beam_length, shape, Ix, c, b, y_array,units=current_labels)
+                    display_profile_info(beam_length, shape, Ix, c, b, y_array, units=current_labels)
 
         elif selection == '4':  # Material Selection
             while True:
                 sub_choice = material_selection_menu()
-                if sub_choice == '3':  # Back to main menu
+                if sub_choice == '5':  # Back to main menu
                     break
                 elif sub_choice == '1':  # Select material
                     if project_state["is_loaded"] and project_state["material_saved"]:
@@ -1001,6 +1116,47 @@ def run_extended_menu():
                         current_labels
                     )
 
+                elif sub_choice == '3':  # Add Custom Material
+                    new_mat = define_custom_material(current_unit_system, current_labels)
+                    if new_mat:
+                        Materials.add_custom_material(new_mat)
+                        print_success(f"Custom material '{new_mat['Material']}' added successfully!")
+                        time.sleep(2)
+                        
+                elif sub_choice == '4':  # Delete Custom Material
+                    if not Materials.custom_materials:
+                        print_error("No custom materials available to delete.")
+                        time.sleep(2)
+                        continue
+                    
+                    clear_screen()
+                    print_title("Delete Custom Material")
+                    for idx, mat in enumerate(Materials.custom_materials, 1):
+                        print_option(f"  {idx}. {mat['Material']}")
+                    print("")
+                    
+                    try:
+                        del_idx = int(input(colored("Enter the number to delete (or 0 to cancel) ➔ ", 'cyan')))
+                        if del_idx == 0:
+                            continue
+                        if 1 <= del_idx <= len(Materials.custom_materials):
+                            mat_name = Materials.custom_materials[del_idx-1]["Material"]
+                            confirm = input(colored(f"Are you sure you want to delete '{mat_name}'? (Y/N): ", 'cyan'))
+                            if confirm.lower() == 'y':
+                                Materials.delete_custom_material(mat_name)
+                                print_success(f"Deleted material '{mat_name}'.")
+                                # If active material was deleted, reset it
+                                if selected_material and selected_material.get("Material") == mat_name:
+                                    selected_material = ''
+                                    project_state["material_saved"] = False
+                                    print(colored("Active material was deleted. Please select a new material.", 'yellow'))
+                            time.sleep(2)
+                        else:
+                            print_error("Invalid selection.")
+                            time.sleep(1)
+                    except ValueError:
+                        print_error("Invalid input.")
+                        time.sleep(1)
 
         elif selection == '5':  # Boundary Conditions
             if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
@@ -1030,11 +1186,20 @@ def run_extended_menu():
                 time.sleep(2)
                 
             elif beam_type == "Continuous":
-                global supports_list
                 supports_list = define_continuous_supports(beam_length, current_unit_system, current_labels)
                 project_state["supports_saved"] = True
                 project_state["has_unsaved_changes"] = True
-                support_types = tuple(["roller" for _ in supports_list]) # Placeholder for schematic plots
+                support_types = tuple(["roller" for _ in supports_list])  
+
+            elif beam_type == "Custom":
+                supports_list = define_custom_supports(beam_length, current_unit_system, current_labels)
+                project_state["supports_saved"] = True
+                project_state["has_unsaved_changes"] = True
+                support_types = tuple(
+                    "pin" if tuple(s["dof"]) == (1,1,0) 
+                    else "fixed" if tuple(s["dof"]) == (1,1,1) 
+                    else "roller" for s in supports_list
+                )
 
             elif beam_type == "Overhanging Beam":
                   while True:
@@ -1236,7 +1401,7 @@ def run_extended_menu():
                                 {"pos": 0.0,         "dof": (1,1,1), "ky": None, "kx": None},
                                 {"pos": beam_length, "dof": (0,1,0), "ky": None, "kx": None},
                             ]
-                        elif beam_type == "Continuous":
+                        elif beam_type == "Continuous" or beam_type == "Custom":
                             _supports = supports_list
 
                         # Invoke unified SymPy solver adapter
@@ -1250,7 +1415,7 @@ def run_extended_menu():
                             triangleloads=triangleloads,
                             E=elastic_modulus,
                             I=Ix,
-                            num_points=2001 # If it takes long time Decreass to 501
+                            num_points=num_points 
                         )
                         
                         # Populate global response arrays directly
@@ -1809,6 +1974,41 @@ def run_extended_menu():
                 else:
                     print_error("Invalid selection!")
                     time.sleep(1)
+        elif selection == '13':  # Solver Resolution
+            while True:
+                res_choice = resolution_menu(num_points)
+                if res_choice == '1':
+                    num_points = 501
+                    print_success("Resolution set to Fast Draft (501 points).")
+                    time.sleep(1.5)
+                    break
+                elif res_choice == '2':
+                    num_points = 1001
+                    print_success("Resolution set to Standard (1001 points).")
+                    time.sleep(1.5)
+                    break
+                elif res_choice == '3':
+                    num_points = 2001
+                    print_success("Resolution set to High (2001 points).")
+                    time.sleep(1.5)
+                    break
+                elif res_choice == '4':
+                    num_points = 5001
+                    print_success("Resolution set to Fine (5001 points).")
+                    time.sleep(1.5)
+                    break
+                elif res_choice == '5':
+                    custom_pts = get_solver_resolution()
+                    if custom_pts is not None:
+                        num_points = custom_pts
+                        print_success(f"Resolution set to Custom ({num_points} points).")
+                        time.sleep(1.5)
+                        break
+                elif res_choice == '6':
+                    break
+                else:
+                    print_error("Invalid selection!")
+                    time.sleep(1)
  
     
         else:
@@ -1820,6 +2020,7 @@ def init():
     global project_state, current_unit_system, current_labels
     current_unit_system = "Metric"
     current_labels = METRIC_LABELS
+    num_points = 2001
     project_state = {
         "is_loaded": False,
         "profile_saved": False, 

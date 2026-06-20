@@ -54,7 +54,7 @@ def _build_supports(beam_type: str, beam_length: float, supports: list) -> list:
         # Propped Cantilever: Fixed at left end (x = 0), Roller at right end (x = L)
         return [Support(0.0, (1, 1, 1)), Support(beam_length, (0, 1, 0))]
 
-    elif beam_type == "Continuous":
+    elif beam_type == "Continuous" or beam_type == "Custom":
         # Dynamically build user-defined boundaries
         result = []
         for s in supports:
@@ -197,7 +197,7 @@ def solve_beam(
         support_positions = [0.0]
     elif beam_type == "Fixed-Fixed" or beam_type == "Propped":
         support_positions = [0.0, beam_length]
-    elif beam_type == "Continuous":
+    elif beam_type == "Continuous" or beam_type == "Custom":
         support_positions = [s["pos"] for s in supports]
     else:
         support_positions = [s["pos"] for s in supports]

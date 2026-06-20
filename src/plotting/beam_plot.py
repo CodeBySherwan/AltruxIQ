@@ -59,12 +59,39 @@ def plot_beam_schematic(beam_type, beam_length, A, B, continuous_supports, loads
     elif beam_type == "Propped":
         traces.append(draw_fixed_support(0.0, "Fixed Support"))
         traces.append(draw_support(scaled_length, "roller"))
-    elif beam_type == "Continuous":
+    elif beam_type == "Continuous" or beam_type == "Custom":
         for s in continuous_supports:
             dof = s.get("dof", (0, 1, 0))
-            # Tuple matching: (1,1,0) is pin, (0,1,0) is roller
-            s_type = "pin" if tuple(dof) == (1, 1, 0) else "roller"
-            traces.append(draw_support(s["pos"] / len_div, s_type))
+            
+            # 1. Intercept Elastic Springs first
+            if s.get("ky") is not None or s.get("kx") is not None:
+                is_vert = s.get("ky") is not None
+                label = "V-Spring" if is_vert else "H-Spring"
+                traces.append(go.Scatter(
+                    x=[s["pos"] / len_div], 
+                    y=[0], 
+                    mode="markers+text",
+                    marker=dict(symbol="bowtie", size=18, color="orange", line=dict(width=1.5, color="black")),
+                    text=[label],
+                    textfont=dict(color="darkorange", size=11),
+                    textposition="bottom center" if is_vert else "top center",
+                    name=label,
+                    showlegend=False,
+                    hoverinfo="text"
+                ))
+                
+            # 2. Check for Fixed boundaries
+            elif tuple(dof) == (1, 1, 1):
+                try:
+                    traces.append(draw_fixed_support(s["pos"] / len_div, "Custom Fixed"))
+                except NameError:
+                    # Fallback just in case draw_fixed_support isn't exported by plotting_helper
+                    traces.append(draw_support(s["pos"] / len_div, "fixed"))
+                    
+            # 3. Fallback to standard Pin / Roller
+            else:
+                s_type = "pin" if tuple(dof) == (1, 1, 0) else "roller"
+                traces.append(draw_support(s["pos"] / len_div, s_type))
             
     # --- Process and scale every load asset ---
     for load in loads:

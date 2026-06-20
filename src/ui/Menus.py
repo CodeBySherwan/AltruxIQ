@@ -87,7 +87,7 @@ def print_success(msg):
 # Extended Main Menu and Runner
 # =============================
 # First, update the main_menu_template() function to add the new option
-def main_menu_template():
+def main_menu_template(current_points=2001):
     """Display an enhanced main menu and return the user's selection."""
     clear_screen()
     
@@ -95,7 +95,7 @@ def main_menu_template():
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
     print(colored("║                                                              ║", 'cyan', attrs=['bold']))
-    print(colored("║              ZYLO-X BEAM ANALYSIS CALCULATOR                 ║", 'cyan', attrs=['bold']))
+    print(colored("║            AltruxIQ FEA - Beam Analysis                      ║", 'cyan', attrs=['bold']))
     print(colored("║                                                              ║", 'cyan', attrs=['bold']))
     print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     print("\n")
@@ -115,7 +115,8 @@ def main_menu_template():
         ("📈 Postprocessing/Visualization", "View detailed plots and diagrams"),
         ("💾 Save Project", "Save your current project to disk"),
         ("📋 Recommendations", "Get engineering recommendations and optimizations"),
-        ("⚙️  Unit System", "Switch between Metric (SI) and US Customary units")
+        ("⚙️  Unit System", "Switch between Metric (SI) and US Customary units"),
+        ("⚙️  Solver Resolution", f"Set analysis point count (current: {current_points})")
     ]
     
     for idx, (title, description) in enumerate(menu_items, 1):
@@ -130,11 +131,12 @@ def main_menu_template():
     # Add a customizable status bar
     print("\n" + colored("┌─ STATUS ", 'green') + colored("─"*53, 'green', attrs=['bold']))
     print(colored("│ Use number keys to select an option", 'green'))
+    print(colored(f"│ Resolution is set to: {current_points} points", 'green'))
     print(colored("└───" + "─"*53, 'green', attrs=['bold']))
     
     # Get user input with improved prompt
     print("")
-    selection = input(colored("Enter your selection [0-12] ➔ ", 'cyan', attrs=['bold']))
+    selection = input(colored("Enter your selection [0-13] ➔ ", 'cyan', attrs=['bold']))
     return selection
 
 # =============================
@@ -257,6 +259,75 @@ def choose_profile():
     profile_choice = input(colored("Enter your preferred profile number [1-8] ➔ ", 'cyan', attrs=['bold']))
     return profile_choice
 
+def profile_source_menu():
+    """Display the profile source options (Custom, Library, Saved)."""
+    clear_screen()
+    print("\n")
+    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+    print(colored("║                    PROFILE SOURCE                            ║", 'cyan', attrs=['bold']))
+    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    print("\n")
+    print(colored("┌─ SELECT PROFILE SOURCE "+"─"*38, 'yellow', attrs=['bold']))
+    
+    menu_items = [
+        ("✍️  Enter Custom Dimensions", "Type in dimensions manually"),
+        ("📚 Standard Section Library", "Browse IPE, HEA, W-Sections..."),
+        ("💾 My Saved Sections", "Retrieve a saved custom section"),
+        ("📥 Save Current Section", "Save the active section for reuse"),
+        ("🗑️  Delete Custom Section", "Remove a user-defined section"),  # <--- NEW OPTION
+        ("⬅️  Return to Profile Menu", "Go back")
+    ]
+    
+    for idx, (title, description) in enumerate(menu_items, 1):
+        print(colored(f"│ {idx:2d} │ {title}", 'yellow') + colored(f" - {description}", 'white'))
+        
+    print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
+    print("")
+    return input(colored("Enter your choice [1-6] ➔ ", 'cyan', attrs=['bold'])) # <--- Updated to 6
+def display_section_library(sections, title="SECTION LIBRARY", is_custom=False):
+    """Display a list of sections and return the user's choice index."""
+    clear_screen()
+    print("\n")
+    print(colored(f"╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+    print(colored(f"║ {title:^60} ║", 'cyan', attrs=['bold']))
+    print(colored(f"╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    print("\n")
+    
+    if not sections:
+        print(colored("  No sections found in this category.", 'red'))
+        print("\n")
+        input(colored("Press Enter to return...", 'cyan', attrs=['bold']))
+        return None
+
+    print(colored("┌─ SELECT A SECTION "+"─"*43, 'yellow', attrs=['bold']))
+    for idx, sec in enumerate(sections, 1):
+        name = sec.get('name', 'Unknown')
+        ix_val = sec.get('Ix', 0)
+        
+        if is_custom:
+            date_str = sec.get('created_at', '')[:10]
+            print(colored(f"│ {idx:2d} │ {name:<25} — Ix = {ix_val:.2e} m⁴ | Saved: {date_str} [CUSTOM]", 'yellow', attrs=['bold']))
+        else:
+            h_val = sec.get('H', sec.get('diameter', 0)) * 1000 # convert m to mm
+            b_val = sec.get('bf', sec.get('width', 0)) * 1000   # convert m to mm
+            print(colored(f"│ {idx:2d} │ {name:<25} — Ix = {ix_val:.2e} m⁴ | H ≈ {h_val:.0f}mm | B ≈ {b_val:.0f}mm", 'white'))
+    
+    print(colored("│  0 │ ⬅️  Go Back", 'red'))
+    print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
+    print("")
+    
+    choice = input(colored(f"Enter your choice [0-{len(sections)}] ➔ ", 'cyan', attrs=['bold']))
+    try:
+        choice_idx = int(choice)
+        if choice_idx == 0:
+            return None
+        if 1 <= choice_idx <= len(sections):
+            return choice_idx - 1
+    except ValueError:
+        pass
+    print_error("Invalid selection!")
+    time.sleep(1)
+    return None
 
 def material_selection_menu():
     """Display an enhanced material selection menu and return the user's choice."""
@@ -275,6 +346,8 @@ def material_selection_menu():
     menu_items = [
         ("🔍 Select Material", "Choose a material from the database"),
         ("📋 View Current Material Details", "Display properties of the selected material"),
+        ("➕ Add Custom Material", "Define and save a new material"),     # <--- NEW
+        ("🗑️  Delete Custom Material", "Remove a user-defined material"), # <--- NEW
         ("⬅️  Return to Main Menu", "Go back to the main menu")
     ]
     
@@ -284,9 +357,8 @@ def material_selection_menu():
     
     print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
     
-    # Get user input with improved prompt
     print("")
-    choice = input(colored("Enter your choice [1-3] ➔ ", 'cyan', attrs=['bold']))
+    choice = input(colored("Enter your choice [1-5] ➔ ", 'cyan', attrs=['bold'])) # <--- CHANGED TO 5
     return choice
 
 
@@ -725,11 +797,16 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
         print(colored("│ Support Type:", 'blue') + colored(" Simply Supported Beam", 'white'))
         print(colored("│ Left Support:", 'blue') + colored(f" {A_type} at x = {A / len_div:.3f} {units['length']}", 'white'))
         print(colored("│ Right Support:", 'blue') + colored(f" {B_type} at x = {B / len_div:.3f} {units['length']}", 'white'))
+
     elif beam_type == "Cantilever":
         print(colored("│ Support Type:", 'blue') + colored(" Cantilever Beam", 'white'))
         print(colored("│ Fixed End:", 'blue') + colored(f" at x = 0.000 {units['length']}", 'white'))
         print(colored("│ Free End:", 'blue') + colored(f" at x = {beam_length / len_div:.3f} {units['length']}", 'white'))
-    
+
+    else:
+        print(colored("│ Support Type:", 'blue') + colored(f" {beam_type} Configuration", 'white'))
+        print(colored("│ Boundaries:", 'blue') + colored(" Defined internally by user", 'white'))
+
     print(colored("│", 'blue'))
     print(colored("└" + "─"*62, 'blue', attrs=['bold']))
     
@@ -764,11 +841,6 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     
     print("\n")
     input(colored("Press Enter to view analysis results...", 'cyan', attrs=['bold']))
-
-
-
-
-
 
 
 def display_analysis_results(beam_type, shape, beam_length, A=None, B=None, 
@@ -1544,3 +1616,29 @@ def unit_system_menu(current_system="Metric"):
     print("")
     choice = input(colored("Select your unit system [1-3] ➔ ", 'cyan', attrs=['bold']))
     return choice
+    #-----------------------------------------------------------------------------------
+    #-----------------------------------------------------------------------------------
+def resolution_menu(current_points):
+    """Display the solver resolution options."""
+    clear_screen()
+    print("\n")
+    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+    print(colored("║                   SOLVER RESOLUTION                          ║", 'cyan', attrs=['bold']))
+    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    print("\n")
+    print(colored("┌─ OPTIONS "+"─"*52, 'yellow', attrs=['bold']))
+    print(colored(f"│ Current setting: {current_points} points", 'white', attrs=['bold']))
+    print(colored("├" + "─"*61, 'yellow'))
+    print(colored("│ 1  │ Fast Draft   (501)", 'yellow') + colored("  — Best for multi-span beams", 'white'))
+    print(colored("│ 2  │ Standard    (1001)", 'yellow') + colored("  — Balanced speed and accuracy", 'white'))
+    print(colored("│ 3  │ High        (2001)", 'yellow') + colored("  — Default", 'white'))
+    print(colored("│ 4  │ Fine        (5001)", 'yellow') + colored("  — Report-quality smooth curves", 'white'))
+    print(colored("│ 5  │ Custom            ", 'yellow') + colored("  — Enter a value (201 - 10001)", 'white'))
+    print(colored("│ 6  │ ⬅️  Return to Main Menu", 'yellow'))
+    print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
+    print(colored("\n  ⚠ Higher values significantly increase solve time for\n    Continuous and indeterminate beams (SymPy evaluation).", 'cyan'))
+    print("")
+    choice = input(colored("Enter your choice [1-6] ➔ ", 'cyan', attrs=['bold']))
+    return choice
+    #---------------------------------------------------------------------------
+    #---------------------------------------------------------------------------

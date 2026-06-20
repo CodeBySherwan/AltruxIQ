@@ -648,3 +648,20 @@ def inertia_moment_hollow_rectangle(units=None):
         't_flange': t_flange, 't_web': t_web,
     }
     return Ix_total, "Hollow Rectangle", c, outer_b, y_array, section_dims
+
+def load_section_from_library(entry: dict) -> tuple:
+    """
+    Convert a sections_database entry into the standard MOI 6-tuple.
+    Returns (Ix, shape_name, c, b_rep, y_array, section_dims) or None on error.
+    """
+    try:
+        Ix    = float(entry["Ix"])
+        shape = entry["shape"]
+        c     = float(entry["c"])
+        b_rep = float(entry.get("tw", entry.get("outer_b", entry.get("diameter", c*2))))
+        y_array = np.linspace(-c, c, 10001)
+        section_dims = entry.get("section_dims", {})
+        return Ix, shape, c, b_rep, y_array, section_dims
+    except (KeyError, TypeError, ValueError) as e:
+        print(colored(f"Error loading section data: {e}", 'red'))
+        return None   
