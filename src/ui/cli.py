@@ -49,8 +49,7 @@ try:
 except ImportError as _pv_err:
     _PYVISTA_AVAILABLE = False
     _pv_import_error   = str(_pv_err)
-from solver.stress_solver import (calculate_beam_deflection,
-                         first_moment_of_area_rect, first_moment_of_area_general,
+from solver.stress_solver import (first_moment_of_area_general,
                          width_array_for_section, calculate_shear_stress,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
