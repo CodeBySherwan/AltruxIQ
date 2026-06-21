@@ -29,83 +29,59 @@ src_dir = os.path.dirname(current_dir)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-from ui.Menus import print_error, print_success, print_title, print_option, clear_screen
+from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
+                     ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head)
 
 #  Beam Classification Setup
 
 def Beam_Classification():
-    """
-    Prompt the user to select a beam classification with enhanced
-    explanations and visual representations.
-    
-    Returns:
-        str: Selected beam type
-    """
+    """Prompt the user to select a structural system (beam idealisation)
+    with schematic previews and determinacy notes. Returns the internal
+    beam-type keyword expected by the solver/controller."""
     clear_screen()
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║                  BEAM CLASSIFICATION                         ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+    ui_banner("STAGE 1  \u2014  STRUCTURAL SYSTEM",
+              "Select the beam idealisation & support topology", color='cyan')
+
+    systems = [
+        ("1", "Simple Supported Beam", "Statically determinate",
+         "\u25b3 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u25cb   (pin \u2014 roller)"),
+        ("2", "Overhanging Beam", "Statically determinate",
+         "\u2500\u2500 \u25b3 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u25cb \u2500\u2500   (cantilevered ends)"),
+        ("3", "Cantilever Beam", "Statically determinate",
+         "\u2503\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501   (fixed \u2014 free)"),
+        ("4", "Fixed\u2013Fixed Beam", "Indeterminate (3\u00b0)",
+         "\u2503\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2503   (fixed \u2014 fixed)"),
+        ("5", "Propped Cantilever", "Indeterminate (1\u00b0)",
+         "\u2503\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 \u25cb   (fixed \u2014 roller)"),
+        ("6", "Continuous Beam", "Indeterminate (multi-span)",
+         "\u25b3 \u2500\u2500\u2500\u2500 \u25cb \u2500\u2500\u2500\u2500 \u25cb \u2500\u2500\u2500\u2500 \u25cb"),
+        ("7", "Custom Beam", "User-defined supports",
+         "? \u2500\u2500\u2500\u2500 ? \u2500\u2500\u2500\u2500 ? \u2500\u2500\u2500\u2500 ?"),
+    ]
+
     print("\n")
-    
-    print(colored("┌─ SELECT BEAM TYPE "+"─"*42, 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    
-    # Option 1: Simple Supported Beam
-    print(colored("│ 1 - Simple Supported Beam", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  ◯ (Roller) ────────────── △ (Pin)", 'white'))
-    print(colored("│", 'yellow'))
-    
-    # Option 2: Overhanging Beam
-    print(colored("│ 2 - Overhanging Beam", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  ──── ◯ ──────────────── △ ───", 'white'))
-    print(colored("│", 'yellow'))
-    
-    # Option 3: Cantilever Beam
-    print(colored("│ 3 - Cantilever Beam", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━━━ (Free)", 'white'))
-    print(colored("│", 'yellow'))
+    ui_open("SELECT BEAM TYPE", 'yellow')
+    ui_blank('yellow')
+    for num, name, determ, schematic in systems:
+        print(colored(f"\u2502 {num} \u2502 ", 'yellow')
+              + colored(name.ljust(24), 'yellow', attrs=['bold'])
+              + colored(determ, 'cyan'))
+        print(colored("\u2502     \u2192 ", 'yellow') + colored(schematic, 'white'))
+        ui_blank('yellow')
+    ui_close('yellow')
 
-    # Option 4: Fixed-Fixed Beam (Indeterminate)
-    print(colored("│ 4 - Fixed-Fixed Beam", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━ | (Fixed)", 'white'))
-    print(colored("│", 'yellow'))
+    print("")
+    classification = input(colored("  Enter your choice [1-7] \u2794 ", 'cyan', attrs=['bold']))
 
-    # Option 5: Propped Cantilever Beam (Indeterminate)
-    print(colored("│ 5 - Propped Cantilever Beam", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  | (Fixed) ━━━━━━━━━━━━━━━━━ ◯ (Roller)", 'white'))
-    print(colored("│", 'yellow'))
-
-    # Option 6: Continuous Beam (Multi-span Indeterminate)
-    print(colored("│ 6 - Continuous Beam (Multi-span)", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  △ ──────── ◯ ──────── ◯ ──────── ◯", 'white'))
-
-    # Option 7: Custom Beam (User-Defined Supports)   
-    print(colored("│ 7 - Custom Beam (User-Defined Supports)", 'yellow', attrs=['bold']))
-    print(colored("│    Visual:  ? ─────── ? ─────── ? ─────── ?", 'white'))   
-    print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-    
-    print("\n")
-    classification = input(colored("Enter your choice [1-6] ➔ ", 'cyan', attrs=['bold']))
-    
-    if classification == '1':
-        return "Simple"
-    elif classification == '2':
-        # Treated as simple layout with custom offsets internally
-        return "Overhanging Beam"  
-    elif classification == '3':
-        return "Cantilever"
-    elif classification == '4':
-        return "Fixed-Fixed"
-    elif classification == '5':
-        return "Propped"
-    elif classification == '6':
-        return "Continuous"
-    elif classification == '7':     
-        return "Custom"
-    else:
-        print_error("Invalid selection! Please choose a number between 1 and 7.")
-        time.sleep(1.5)
-        return Beam_Classification()
+    mapping = {
+        '1': "Simple", '2': "Overhanging Beam", '3': "Cantilever",
+        '4': "Fixed-Fixed", '5': "Propped", '6': "Continuous", '7': "Custom",
+    }
+    if classification in mapping:
+        return mapping[classification]
+    print_error("Invalid selection! Please choose a number between 1 and 7.")
+    time.sleep(1.5)
+    return Beam_Classification()
 
 def Beam_Length(unit_system="Metric", units=None):
     """Prompt the user to enter the beam length."""

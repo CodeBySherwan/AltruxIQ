@@ -55,7 +55,8 @@ from solver.stress_solver import (calculate_beam_deflection,
                          calculate_bending_stress, Factor_of_Safety)
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library)
+                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library,
+                 ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head, ui_footer)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification,define_continuous_supports,get_solver_resolution,define_custom_material,define_custom_supports
 
 
@@ -1443,18 +1444,20 @@ def run_extended_menu():
                         min_bending = round(np.min(Total_BendingMoment), 3)
         
                         # Display analysis completion message
-                        print("")
-                        print(colored("╔══════════════════════════════════════════════════════════════╗", 'green', attrs=['bold']))
-                        print(colored("║           BEAM ANALYSIS COMPLETED SUCCESSFULLY!              ║", 'green', attrs=['bold']))
-                        print(colored("╚══════════════════════════════════════════════════════════════╝", 'green', attrs=['bold']))
-                        print("")
-                        print(colored("You can now:", 'white'))
-                        print(colored("• View detailed analysis results", 'white'))
-                        print(colored("• Calculate deflection", 'white'))
-                        print(colored("• Calculate stress and factor of safety", 'white'))
-                        print(colored("• Visualize results through plots", 'white'))
-                        print("")
-                        input(colored("Press Enter to return to the Analysis/Simulation menu...", 'cyan', attrs=['bold']))
+                        ui_banner("SOLUTION CONVERGED — ANALYSIS COMPLETE",
+                                  "Stage 2 finished • proceed to Stage 3 (Post-Processing)",
+                                  color='green')
+                        print("\n")
+                        ui_open("AVAILABLE NEXT STEPS", 'green')
+                        ui_blank('green')
+                        ui_bullet("View detailed solution results (reactions & internal forces).", 'white', 'green')
+                        ui_bullet("Run the serviceability (deflection) limit-state check.", 'white', 'green')
+                        ui_bullet("Run the strength (stress & factor-of-safety) check.", 'white', 'green')
+                        ui_bullet("Open the consolidated Design-Check & Recommendations report.", 'white', 'green')
+                        ui_bullet("Generate SFD/BMD, stress, deflection & 3D FEA contour plots.", 'white', 'green')
+                        ui_blank('green')
+                        ui_close('green')
+                        ui_footer("Press Enter to return to the Solution menu...")
         
                     except Exception as e:
                         print_error(f"Error solving beam: {e}")

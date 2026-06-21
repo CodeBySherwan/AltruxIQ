@@ -2,6 +2,146 @@ import os
 import time
 from termcolor import colored, cprint
 import numpy as np
+
+# =============================================================================
+#  PROFESSIONAL CONSOLE UI TOOLKIT  (commercial-grade rendering primitives)
+# -----------------------------------------------------------------------------
+#  Centralised drawing helpers so every screen shares one consistent visual
+#  language: framed banners, titled section rules, aligned key/value fields,
+#  utilisation bars and pass/fail status badges. Used across all menus and
+#  result/report screens. Pure stdlib + termcolor; no external dependencies.
+# =============================================================================
+UI_W = 64  # inner width (number of horizontal glyphs between frame corners)
+
+
+def _strip_len(text):
+    """Visible length of a string (helper for alignment)."""
+    return len(text)
+
+
+def ui_banner(title, subtitle=None, color='cyan'):
+    """Render a centred, double-ruled title banner."""
+    print("\n")
+    print(colored("\u2554" + "\u2550" * UI_W + "\u2557", color, attrs=['bold']))
+    print(colored("\u2551" + str(title).center(UI_W) + "\u2551", color, attrs=['bold']))
+    if subtitle:
+        print(colored("\u2551" + str(subtitle).center(UI_W) + "\u2551", color))
+    print(colored("\u255a" + "\u2550" * UI_W + "\u255d", color, attrs=['bold']))
+
+
+def ui_open(title, color='yellow'):
+    """Open a titled section rule:  +- TITLE --------------------------"""
+    title = str(title)
+    pad = UI_W - (len(title) + 3)
+    if pad < 1:
+        pad = 1
+    print(colored(f"\u250c\u2500 {title} " + "\u2500" * pad, color, attrs=['bold']))
+
+
+def ui_close(color='yellow'):
+    """Close a section rule."""
+    print(colored("\u2514" + "\u2500" * UI_W, color, attrs=['bold']))
+
+
+def ui_blank(color='yellow'):
+    """Vertical spacer inside a section."""
+    print(colored("\u2502", color))
+
+
+def ui_text(text, color='white', frame_color=None):
+    """Plain framed line of text."""
+    fc = frame_color or color
+    print(colored("\u2502 ", fc) + colored(str(text), color))
+
+
+def ui_head(text, color='white', frame_color=None):
+    """Bold sub-heading line inside a section."""
+    fc = frame_color or color
+    print(colored("\u2502 ", fc) + colored(str(text), color, attrs=['bold']))
+
+
+def ui_field(label, value, frame_color='white', label_color=None,
+             value_color='white', width=30, bullet=None):
+    """Aligned key/value row with optional bullet and dotted leader feel."""
+    lc = label_color or frame_color
+    lead = f"  {bullet} " if bullet else " "
+    label = str(label)
+    line = f"{label}".ljust(width)
+    print(colored("\u2502" + lead, frame_color)
+          + colored(line, lc)
+          + colored(str(value), value_color, attrs=['bold']))
+
+
+def ui_bullet(text, color='white', frame_color=None, mark="\u2022"):
+    """Bulleted list item."""
+    fc = frame_color or color
+    print(colored("\u2502   " + mark + " ", fc) + colored(str(text), color))
+
+
+def ui_bar(frac, width=24):
+    """Return (rendered_bar, color) for a 0..>1 utilisation fraction."""
+    try:
+        frac = float(frac)
+    except (TypeError, ValueError):
+        frac = 0.0
+    if frac < 0:
+        frac = 0.0
+    filled = int(round(min(frac, 1.0) * width))
+    filled = max(0, min(width, filled))
+    if frac <= 0.75:
+        col = 'green'
+    elif frac <= 0.95:
+        col = 'yellow'
+    else:
+        col = 'red'
+    bar = "\u2588" * filled + "\u2591" * (width - filled)
+    pct = f"{frac * 100:6.1f}%"
+    return colored(bar, col) + colored(f" {pct}", col, attrs=['bold']), col
+
+
+def ui_check_row(name, dc_ratio, status_text=None, width=22):
+    """Render one limit-state check line: name | bar | D/C | verdict."""
+    bar, col = ui_bar(dc_ratio)
+    name = str(name).ljust(width)
+    if status_text is None:
+        if dc_ratio <= 0.95:
+            status_text = "PASS \u2713"
+        elif dc_ratio <= 1.0:
+            status_text = "MARGINAL \u26a0"
+        else:
+            status_text = "FAIL \u2717"
+    print(colored("\u2502 ", col) + colored(name, 'white')
+          + bar + colored(f"  D/C={dc_ratio:5.2f}  ", 'white')
+          + colored(status_text, col, attrs=['bold']))
+
+
+def ui_verdict_badge(status):
+    """Map a verdict keyword to (label, color)."""
+    s = str(status).upper()
+    table = {
+        'PASS':     ("\u2713 PASS \u2014 DESIGN ACCEPTABLE", 'green'),
+        'REVIEW':   ("\u26a0 REVIEW \u2014 MARGINAL / ENGINEER JUDGEMENT REQUIRED", 'yellow'),
+        'FAIL':     ("\u2717 FAIL \u2014 DESIGN NOT ACCEPTABLE", 'red'),
+        'INCOMPLETE': ("\u2139 INCOMPLETE \u2014 RUN STRESS & DEFLECTION CHECKS", 'cyan'),
+    }
+    return table.get(s, (s, 'white'))
+
+
+def ui_footer(text="Press Enter to continue...", color='cyan'):
+    """Standard interactive footer prompt."""
+    print("\n")
+    return input(colored(f"  {text}", color, attrs=['bold']))
+
+
+def ui_menu_stage(stage_label, color='cyan'):
+    """Print an FEA workflow stage divider used to group main-menu items."""
+    label = f"  {stage_label}  "
+    pad_total = UI_W - len(label)
+    left = pad_total // 2
+    right = pad_total - left
+    print(colored("\u2502", 'yellow')
+          + colored("\u00b7" * left + label + "\u00b7" * right, color, attrs=['bold']))
+
 # =============================
 # Global Unit Configurations
 # =============================
@@ -88,55 +228,73 @@ def print_success(msg):
 # =============================
 # First, update the main_menu_template() function to add the new option
 def main_menu_template(current_points=2001):
-    """Display an enhanced main menu and return the user's selection."""
+    """Display the main menu, organised by the standard FEA workflow:
+    Pre-Processing -> Solution -> Post-Processing -> Configuration.
+    Item numbers are preserved (0-13) so the controller dispatch is unchanged.
+    """
     clear_screen()
-    
-    # Create a decorative header
+    ui_banner("AltruxIQ  \u2022  STRUCTURAL FEA SUITE",
+              "Beam Analysis & Design-Check Workstation", color='cyan')
+
     print("\n")
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║                                                              ║", 'cyan', attrs=['bold']))
-    print(colored("║            AltruxIQ FEA - Beam Analysis                      ║", 'cyan', attrs=['bold']))
-    print(colored("║                                                              ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    print("\n")
-    
-    # Create a visually distinct menu with icons and better formatting
-    print(colored("┌─ MAIN MENU "+"─"*50, 'yellow', attrs=['bold']))
-    
-    menu_items = [
-        ("🔧 Project Management", "Create, load, or save your beam projects"),
-        ("📐 Define Beam Type", "Select Simple Supported or Cantilever Beam"),
-        ("🧮 Profile Definition", "Set beam dimensions and cross-section properties"),
-        ("🧪 Material Selection", "Choose material properties for your beam"),
-        ("🔒 Boundary Conditions", "Define support conditions and constraints"),
-        ("⚖️  Loads Definition", "Apply forces, moments, and distributed loads"),
-        ("📊 Show Beam Schematic", "Visualize beam with loads and supports"),
-        ("🔬 Analysis/Simulation", "Calculate beam response and results"),
-        ("📈 Postprocessing/Visualization", "View detailed plots and diagrams"),
-        ("💾 Save Project", "Save your current project to disk"),
-        ("📋 Recommendations", "Get engineering recommendations and optimizations"),
-        ("⚙️  Unit System", "Switch between Metric (SI) and US Customary units"),
-        ("⚙️  Solver Resolution", f"Set analysis point count (current: {current_points})")
+    ui_open("ANALYSIS WORKFLOW", 'yellow')
+    ui_blank('yellow')
+
+    # ---- Stage 1: PRE-PROCESSING ----------------------------------------
+    ui_menu_stage("STAGE 1  \u2014  PRE-PROCESSING", 'cyan')
+    pre_items = [
+        ("\U0001f5c2  Project Management", "Create, load, modify or delete analysis projects"),
+        ("\U0001f4d0  Beam Type / Model", "Define structural system & support topology"),
+        ("\U0001f9ee  Section / Profile", "Cross-section geometry & section properties"),
+        ("\U0001f9ea  Material Model", "Assign material & mechanical properties"),
+        ("\U0001f512  Boundary Conditions", "Supports, restraints & degrees of freedom"),
+        ("\u2696\ufe0f   Load Application", "Point, distributed, moment & triangular loads"),
+        ("\U0001f4ca  Model Preview", "Render beam schematic with loads & supports"),
     ]
-    
-    for idx, (title, description) in enumerate(menu_items, 1):
-        # Format each menu item with a number, title, and description
-        print(colored(f"│ {idx:2d} │ {title}", 'yellow') + 
-              colored(f" - {description}", 'white'))
-    
-    print(colored("│ 0  │ 🚪 Exit", 'red') + 
-          colored(" - Close the application", 'white'))
-    print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
-    
-    # Add a customizable status bar
-    print("\n" + colored("┌─ STATUS ", 'green') + colored("─"*53, 'green', attrs=['bold']))
-    print(colored("│ Use number keys to select an option", 'green'))
-    print(colored(f"│ Resolution is set to: {current_points} points", 'green'))
-    print(colored("└───" + "─"*53, 'green', attrs=['bold']))
-    
-    # Get user input with improved prompt
+    for idx, (title, desc) in enumerate(pre_items, 1):
+        print(colored(f"\u2502 {idx:2d} \u2502 {title}", 'yellow')
+              + colored(f"  \u2014 {desc}", 'white'))
+
+    ui_blank('yellow')
+    # ---- Stage 2: SOLUTION ----------------------------------------------
+    ui_menu_stage("STAGE 2  \u2014  SOLUTION", 'cyan')
+    print(colored("\u2502  8 \u2502 \U0001f9e9  Solve / Simulate", 'yellow')
+          + colored("  \u2014 Reactions, shear, moment, deflection & stress", 'white'))
+
+    ui_blank('yellow')
+    # ---- Stage 3: POST-PROCESSING ---------------------------------------
+    ui_menu_stage("STAGE 3  \u2014  POST-PROCESSING", 'cyan')
+    print(colored("\u2502  9 \u2502 \U0001f4c8  Results & Visualization", 'yellow')
+          + colored("  \u2014 SFD/BMD, stress, deflection, 3D FEA contours", 'white'))
+    print(colored("\u2502 11 \u2502 \U0001f4cb  Design Check & Recommendations", 'yellow')
+          + colored("  \u2014 Limit-state verification & optimisation report", 'white'))
+
+    ui_blank('yellow')
+    # ---- Data + Configuration -------------------------------------------
+    ui_menu_stage("DATA  &  CONFIGURATION", 'cyan')
+    print(colored("\u2502 10 \u2502 \U0001f4be  Save Project", 'yellow')
+          + colored("  \u2014 Persist current model & results to disk", 'white'))
+    print(colored("\u2502 12 \u2502 \u2699\ufe0f   Unit System", 'yellow')
+          + colored("  \u2014 Switch SI (Metric) \u2194 US Customary", 'white'))
+    print(colored("\u2502 13 \u2502 \u2699\ufe0f   Solver Resolution", 'yellow')
+          + colored(f"  \u2014 Discretisation density (current: {current_points} pts)", 'white'))
+
+    ui_blank('yellow')
+    print(colored("\u2502  0 \u2502 \U0001f6aa  Exit", 'red')
+          + colored("  \u2014 Close the application", 'white'))
+    ui_close('yellow')
+
+    # ---- Status bar ------------------------------------------------------
+    print("\n")
+    ui_open("SESSION STATUS", 'green')
+    ui_field("Solver discretisation", f"{current_points} integration points",
+             frame_color='green', label_color='green', value_color='white')
+    ui_field("Workflow", "Follow stages 1 \u2192 2 \u2192 3 for a complete analysis",
+             frame_color='green', label_color='green', value_color='white')
+    ui_close('green')
+
     print("")
-    selection = input(colored("Enter your selection [0-13] ➔ ", 'cyan', attrs=['bold']))
+    selection = input(colored("  Enter selection [0-13] \u2794 ", 'cyan', attrs=['bold']))
     return selection
 
 # =============================
@@ -844,754 +1002,663 @@ def display_analysis_info(beam_type, beam_length, shape, selected_material,
     input(colored("Press Enter to view analysis results...", 'cyan', attrs=['bold']))
 
 
-def display_analysis_results(beam_type, shape, beam_length, A=None, B=None, 
-                           Va=None, Ha=None, Vb=None, Ma=None, 
-                           max_shear=None, min_shear=None, 
+def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
+                           Va=None, Ha=None, Vb=None, Ma=None,
+                           max_shear=None, min_shear=None,
                            max_bending=None, min_bending=None, units=METRIC_UNITS):
-    """
-    Display analysis results in a professional FEA-like format.
-    
-    Parameters:
-    -----------
-    beam_type: str
-        Type of beam ("Simple" or "Cantilever")
-    shape: str
-        Name of the profile shape
-    beam_length: float
-        Length of the beam in meters
-    A, B: float
-        Support positions for simple beam (optional)
-    Va, Ha, Vb, Ma: float
-        Reaction forces and moments
-    max_shear, min_shear: float
-        Maximum and minimum shear force values
-    max_bending, min_bending: float
-        Maximum and minimum bending moment values
-    """
+    """Professional, commercial-grade presentation of the static solution:
+    solver summary, support reactions, equilibrium audit and critical envelopes."""
     clear_screen()
     len_div = get_divisor(units, 'length')
     force_div = get_divisor(units, 'force')
     mom_div = get_divisor(units, 'moment')
-    # Create decorative header
+
+    ui_banner("SOLUTION RESULTS  \u2014  STATIC ANALYSIS",
+              "Reactions \u2022 Internal Forces \u2022 Equilibrium Audit", color='cyan')
+
+    # ---- Solver summary --------------------------------------------------
     print("\n")
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║                  ANALYSIS RESULTS                             ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    
-    # Results summary header
+    ui_open("SOLVER SUMMARY", 'blue')
+    ui_blank('blue')
+    ui_field("Analysis type", "Static \u2014 Linear Elastic (1D Beam)", 'blue', 'blue')
+    ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
+    ui_field("Span length", f"{beam_length / len_div:.3f} {units['length']}", 'blue', 'blue')
+    ui_field("Cross-section", f"{shape}", 'blue', 'blue')
+    ui_field("Solution status", "CONVERGED \u2713", 'blue', 'blue', value_color='green')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ---- Support reactions ----------------------------------------------
     print("\n")
-    print(colored("┌─ SOLVER SUMMARY "+"─"*44, 'blue', attrs=['bold']))
-    print(colored("│", 'blue'))
-    print(colored("│ Analysis Type:", 'blue') + colored(" Static Linear Elastic", 'white'))
-    print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length / len_div:.3f} {units['length']}", 'white'))
-    print(colored("│ Profile Type:", 'blue') + colored(f" {shape}", 'white'))
-    print(colored("│ Solution Status:", 'blue') + colored(" COMPLETED ✓", 'green', attrs=['bold']))
-    print(colored("│", 'blue'))
-    print(colored("└" + "─"*62, 'blue', attrs=['bold']))
-    
-    # Support reactions
-    print("\n")
-    print(colored("┌─ SUPPORT REACTIONS "+"─"*42, 'green', attrs=['bold']))
-    print(colored("│", 'green'))
-    
+    ui_open("SUPPORT REACTIONS", 'green')
+    ui_blank('green')
     if beam_type == "Simple":
-        print(colored("│ Support Configuration:", 'green') + colored(" Pin-Roller", 'white'))
-        print(colored("│", 'green'))
-        print(colored("│ Left Support (Pin):", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(f" {A / len_div:.3f} {units['length']}", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va / force_div:.3f} {units['force']}", 'white'))
-        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha / force_div:.3f} {units['force']}", 'white'))
-        print(colored("│", 'green'))
-        print(colored("│ Right Support (Roller):", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(f" {B / len_div:.3f} {units['length']}", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Vb / force_div:.3f} {units['force']}", 'white'))
-
+        ui_field("Support configuration", "Pin (A) \u2014 Roller (B)", 'green', 'green')
+        ui_blank('green')
+        ui_head("Support A  (Pin)", 'green', 'green')
+        ui_field("Position", f"{A / len_div:.3f} {units['length']}", 'green', 'green', bullet="\u2022")
+        ui_field("Vertical reaction  Rᵧ", f"{Va / force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+        ui_field("Horizontal reaction Rₓ", f"{Ha / force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+        ui_blank('green')
+        ui_head("Support B  (Roller)", 'green', 'green')
+        ui_field("Position", f"{B / len_div:.3f} {units['length']}", 'green', 'green', bullet="\u2022")
+        ui_field("Vertical reaction  Rᵧ", f"{Vb / force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
     elif beam_type == "Cantilever":
-        print(colored("│ Support Configuration:", 'green') + colored(" Fixed-Free", 'white'))
-        print(colored("│", 'green'))
-        print(colored("│ Fixed Support:", 'green', attrs=['bold']))
-        print(colored("│  • Position:", 'green') + colored(f" 0.000 {units['length']}", 'white'))
-        print(colored("│  • Vertical Reaction:", 'green') + colored(f" {Va / force_div:.3f} {units['force']}", 'white'))
-        print(colored("│  • Horizontal Reaction:", 'green') + colored(f" {Ha / force_div:.3f} {units['force']}", 'white'))
-        print(colored("│  • Moment Reaction:", 'green') + colored(f" {Ma / mom_div:.3f} {units['moment']}", 'white'))
-    
-    print(colored("│", 'green'))
-    print(colored("└" + "─"*62, 'green', attrs=['bold']))
-    
-    # Equilibrium check
-    v_sum = Va + (Vb if beam_type == "Simple" else 0)
-    h_sum = Ha
-    print("\n")
-    print(colored("┌─ EQUILIBRIUM VERIFICATION "+"─"*36, 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    print(colored("│ Sum of Vertical Forces:", 'yellow') + colored(f" {v_sum/force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
-    print(colored("│ Sum of Horizontal Forces:", 'yellow') + colored(f" {h_sum/force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
-    
-    if abs(v_sum) < 0.001 and abs(h_sum) < 0.001:
-        print(colored("│ Equilibrium Check:", 'yellow') + colored(" PASSED ✓", 'green', attrs=['bold']))
+        ui_field("Support configuration", "Fixed (A) \u2014 Free (B)", 'green', 'green')
+        ui_blank('green')
+        ui_head("Fixed Support", 'green', 'green')
+        ui_field("Position", f"0.000 {units['length']}", 'green', 'green', bullet="\u2022")
+        ui_field("Vertical reaction  Rᵧ", f"{Va / force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+        ui_field("Horizontal reaction Rₓ", f"{Ha / force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+        ui_field("Moment reaction  M", f"{Ma / mom_div:.3f} {units['moment']}", 'green', 'green', bullet="\u2022")
     else:
-        print(colored("│ Equilibrium Check:", 'yellow') + colored(" WARNING ⚠", 'red', attrs=['bold']))
-        print(colored("│  Small numerical discrepancies may exist", 'yellow'))
-    
-    print(colored("│", 'yellow'))
-    print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-    
-    # Critical values
+        ui_field("Support configuration", f"{beam_type}", 'green', 'green')
+        ui_field("Reaction at origin Rᵧ", f"{(Va or 0)/ force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+        ui_field("Reaction at far end Rᵧ", f"{(Vb or 0)/ force_div:.3f} {units['force']}", 'green', 'green', bullet="\u2022")
+    ui_blank('green')
+    ui_close('green')
+
+    # ---- Equilibrium verification ---------------------------------------
+    v_sum = (Va or 0) + (Vb if beam_type == "Simple" else 0)
+    h_sum = (Ha or 0)
     print("\n")
-    print(colored("┌─ CRITICAL RESULTS "+"─"*42, 'magenta', attrs=['bold']))
-    print(colored("│", 'magenta'))
-    
-    # Shear force
+    ui_open("EQUILIBRIUM AUDIT  (\u03a3F = 0, \u03a3M = 0)", 'yellow')
+    ui_blank('yellow')
+    ui_field("\u03a3 Vertical forces", f"{v_sum/force_div:.3e} {units['force']}", 'yellow', 'yellow')
+    ui_field("\u03a3 Horizontal forces", f"{h_sum/force_div:.3e} {units['force']}", 'yellow', 'yellow')
+    if abs(v_sum) < 1e-2 and abs(h_sum) < 1e-2:
+        ui_field("Static equilibrium", "SATISFIED \u2713", 'yellow', 'yellow', value_color='green')
+    else:
+        ui_field("Static equilibrium", "RESIDUAL DETECTED \u26a0", 'yellow', 'yellow', value_color='red')
+        ui_bullet("Minor residuals are numerical (rounding) for determinate systems.", 'yellow', 'yellow')
+    ui_blank('yellow')
+    ui_close('yellow')
+
+    # ---- Critical internal-force envelopes ------------------------------
     abs_max_shear = max(abs(max_shear), abs(min_shear))
-    print(colored("│ SHEAR FORCE", 'magenta', attrs=['bold']))
-    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
-    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
-    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_shear / force_div:.3f} {units['force']}", 'white')) # <-- CHANGED
-    print(colored("│", 'magenta'))
-    
-    # Bending moment
     abs_max_moment = max(abs(max_bending), abs(min_bending))
-    print(colored("│ BENDING MOMENT", 'magenta', attrs=['bold']))
-    print(colored("│  • Maximum Positive:", 'magenta') + colored(f" {max_bending / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
-    print(colored("│  • Maximum Negative:", 'magenta') + colored(f" {min_bending / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
-    print(colored("│  • Absolute Maximum:", 'magenta') + colored(f" {abs_max_moment / mom_div:.3f} {units['moment']}", 'white')) # <-- CHANGED
-    
-    print(colored("│", 'magenta'))
-    print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
-    
-    # Guidelines for further analysis
     print("\n")
-    print(colored("┌─ ANALYSIS RECOMMENDATIONS "+"─"*35, 'cyan', attrs=['bold']))
-    print(colored("│", 'cyan'))
-    print(colored("│ ▶ Recommended Next Steps:", 'cyan', attrs=['bold']))
-    print(colored("│   1. Calculate deflection to assess serviceability", 'cyan'))
-    print(colored("│   2. Evaluate stress levels and factor of safety", 'cyan'))
-    print(colored("│   3. Generate visualization plots", 'cyan'))
-    
-    if abs_max_moment > 1000:
-        print(colored("│", 'cyan'))
-        print(colored("│ ▶ Special Attention Required:", 'cyan', attrs=['bold']))
-        print(colored("│   • High bending moment detected", 'cyan'))
-        print(colored("│   • Consider verifying profile selection", 'cyan'))
-    
-    print(colored("│", 'cyan'))
-    print(colored("└" + "─"*62, 'cyan', attrs=['bold']))
-    
+    ui_open("CRITICAL INTERNAL-FORCE ENVELOPE", 'magenta')
+    ui_blank('magenta')
+    ui_head("Shear Force  V(x)", 'magenta', 'magenta')
+    ui_field("Maximum (+)", f"{max_shear / force_div:.3f} {units['force']}", 'magenta', 'magenta', bullet="\u2022")
+    ui_field("Minimum (\u2212)", f"{min_shear / force_div:.3f} {units['force']}", 'magenta', 'magenta', bullet="\u2022")
+    ui_field("Absolute peak |V|", f"{abs_max_shear / force_div:.3f} {units['force']}", 'magenta', 'magenta',
+             bullet="\u2022", value_color='white')
+    ui_blank('magenta')
+    ui_head("Bending Moment  M(x)", 'magenta', 'magenta')
+    ui_field("Maximum (+)", f"{max_bending / mom_div:.3f} {units['moment']}", 'magenta', 'magenta', bullet="\u2022")
+    ui_field("Minimum (\u2212)", f"{min_bending / mom_div:.3f} {units['moment']}", 'magenta', 'magenta', bullet="\u2022")
+    ui_field("Absolute peak |M|", f"{abs_max_moment / mom_div:.3f} {units['moment']}", 'magenta', 'magenta',
+             bullet="\u2022", value_color='white')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ---- Next steps ------------------------------------------------------
     print("\n")
-    input(colored("Press Enter to return to the Analysis/Simulation menu...", 'cyan', attrs=['bold']))
+    ui_open("RECOMMENDED NEXT STEPS", 'cyan')
+    ui_blank('cyan')
+    ui_bullet("Run Deflection check  \u2014 assess serviceability (L/360, L/480).", 'cyan', 'cyan')
+    ui_bullet("Run Stress & FoS check \u2014 verify strength limit state.", 'cyan', 'cyan')
+    ui_bullet("Open Design Check report \u2014 consolidated verification & sizing.", 'cyan', 'cyan')
+    ui_bullet("Generate SFD/BMD & 3D contour plots in Post-Processing.", 'cyan', 'cyan')
+    ui_blank('cyan')
+    ui_close('cyan')
+
+    ui_footer("Press Enter to return to the Solution menu...")
 
 
 
 
-def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, Ix, Deflection, Slope, curv, units=METRIC_UNITS): # <-- Added units
-    """
-    Display deflection analysis results in a professional FEA-like format.
-    
-    Parameters:
-    -----------
-    beam_length: float
-        Length of the beam in meters
-    shape: str
-        Name of the profile shape
-    beam_type: str
-        Type of beam ("Simple" or "Cantilever")
-    elastic_modulus: float
-        Elastic modulus in Pa
-    Ix: float
-        Moment of inertia in m⁴
-    Deflection: ndarray
-        Array of deflection values along the beam
-    Slope: ndarray
-        Array of slope values along the beam
-    curv: ndarray
-        Array of curvature values along the beam
-    """
-    clear_screen()
-    len_div = 0.3048 if units.get('length') == 'ft' else 1.0
-    # Find maximum deflection and its location
-    max_defl_idx = np.argmax(np.abs(Deflection))
-    max_defl = Deflection[max_defl_idx]
-    max_defl_pos = max_defl_idx * (beam_length / (len(Deflection) - 1))
-    
-    # Find maximum slope and its location
-    max_slope_idx = np.argmax(np.abs(Slope))
-    max_slope = Slope[max_slope_idx]
-    max_slope_pos = max_slope_idx * (beam_length / (len(Slope) - 1))
-    
-    # Find maximum curvature and its location
-    max_curv_idx = np.argmax(np.abs(curv))
-    max_curv = curv[max_curv_idx]
-    max_curv_pos = max_curv_idx * (beam_length / (len(curv) - 1))
-    
-    # Calculate deflection-to-span ratio (important engineering metric)
-    span_ratio = abs(max_defl) / beam_length
-    
-    # Create decorative header
-    print("\n")
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║                DEFLECTION ANALYSIS RESULTS                   ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    
-    # Solution parameters
-    print("\n")
-    print(colored("┌─ SOLUTION PARAMETERS "+"─"*39, 'blue', attrs=['bold']))
-    print(colored("│", 'blue'))
-    print(colored("│ Solution Method:", 'blue') + colored(" Euler-Bernoulli Beam Theory", 'white'))
-    print(colored("│ Integration Technique:", 'blue') + colored(" Numerical Integration (Trapezoidal)", 'white'))
-    print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Profile Type:", 'blue') + colored(f" {shape}", 'white'))
-    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│ Elastic Modulus (E):", 'blue') + colored(f" {elastic_modulus/1e9:.1f} {units['modulus']}", 'white')) # <-- CHANGED
-    print(colored("│ Moment of Inertia (I):", 'blue') + colored(f" {Ix:.6e} {units['inertia']}", 'white')) # <-- CHANGED
-    print(colored("│ Flexural Rigidity (EI):", 'blue') + colored(f" {elastic_modulus*Ix:.2e} {units['force']}·{units['length']}²", 'white')) # <-- CHANGED
-    print(colored("│", 'blue'))
-    print(colored("└" + "─"*62, 'blue', attrs=['bold']))
-    
-    # Deflection results
-    print("\n")
-    print(colored("┌─ DEFLECTION RESULTS "+"─"*40, 'green', attrs=['bold']))
-    print(colored("│", 'green'))
-    
-    # Format max deflection with appropriate units
-    max_defl_abs = abs(max_defl)
-    small_len_div = get_divisor(units, 'length_small') # Get the proper divisor (0.001 or 0.0254)
-    
-    if max_defl_abs < 1e-3:
-        max_defl_str = f"{max_defl / small_len_div:.4f} {units['length_small']}" 
-        deflection_unit = units['length_small'] 
-        scaling_factor = 1.0 / small_len_div
-    else:
-        max_defl_str = f"{max_defl / len_div:.6f} {units['length']}" 
-        deflection_unit = units['length'] 
-        scaling_factor = 1.0 / len_div
-    
-    print(colored("│ Maximum Deflection:", 'green') + colored(f" {max_defl_str} {'↑' if max_defl > 0 else '↓'}", 'white'))
-    print(colored("│ Location of Maximum:", 'green') + colored(f" x = {max_defl_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│ Deflection-to-Span Ratio:", 'green') + colored(f" 1:{(1/span_ratio):.0f}", 'white'))
-    
-    # Add deflection limit check (common engineering limit is L/360 for live loads)
-    l_360_limit = beam_length / 360
-    if abs(max_defl) > l_360_limit:
-        print(colored("│ Deflection Limit Check:", 'green') + 
-              colored(" EXCEEDS L/360 ⚠", 'red', attrs=['bold']))
-        print(colored("│  • Limit Value (L/360):", 'green') + 
-              colored(f" {l_360_limit*scaling_factor:.4f} {deflection_unit}", 'white'))
-    else:
-        print(colored("│ Deflection Limit Check:", 'green') + 
-              colored(" WITHIN L/360 ✓", 'white', attrs=['bold']))
-        print(colored("│  • Limit Value (L/360):", 'green') + 
-              colored(f" {l_360_limit*scaling_factor:.4f} {deflection_unit}", 'white'))
-    
-    print(colored("│", 'green'))
-    print(colored("└" + "─"*62, 'green', attrs=['bold']))
-    
-    # Slope and curvature
-    print("\n")
-    print(colored("┌─ ADDITIONAL DEFORMATION PARAMETERS "+"─"*27, 'magenta', attrs=['bold']))
-    print(colored("│", 'magenta'))
-    print(colored("│ Maximum Slope:", 'magenta') + colored(f" {max_slope:.6f} rad ({np.degrees(max_slope):.2f}°)", 'white'))
-    print(colored("│ Location of Max Slope:", 'magenta') + colored(f" x = {max_slope_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│", 'magenta'))
-    print(colored("│ Maximum Curvature:", 'magenta') + colored(f" {max_curv:.6e} 1/{units['length']}", 'white')) # <-- CHANGED
-    print(colored("│ Location of Max Curvature:", 'magenta') + colored(f" x = {max_curv_pos:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│", 'magenta'))
-    print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
-    
-    # Engineering interpretations
-    print("\n")
-    print(colored("┌─ ENGINEERING INTERPRETATION "+"─"*34, 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    
-    # Interpret span ratio
-    if span_ratio < 1/500:
-        defl_interpretation = "Minimal deflection, suitable for sensitive equipment or precision applications"
-    elif span_ratio < 1/360:
-        defl_interpretation = "Moderate deflection, suitable for standard building applications"
-    elif span_ratio < 1/240:
-        defl_interpretation = "Significant deflection, acceptable for some temporary structures"
-    else:
-        defl_interpretation = "Large deflection, may require design modifications"
-    
-    print(colored("│ Deflection Assessment:", 'yellow') + colored(f" {defl_interpretation}", 'white'))
-    print(colored("│", 'yellow'))
-    
-    # Common limits reference
-    print(colored("│ Common Deflection Limits:", 'yellow', attrs=['bold']))
-    print(colored("│  • L/360: General building code requirement", 'yellow'))
-    print(colored("│  • L/480: More stringent requirement for brittle finishes", 'yellow'))
-    print(colored("│  • L/240: Maximum for non-structural elements", 'yellow'))
-    print(colored("│", 'yellow'))
-    
-    # Specific recommendations based on beam type
-    if beam_type == "Cantilever" and span_ratio > 1/180:
-        print(colored("│ Recommendation:", 'yellow') + 
-              colored(" Consider increasing section depth to reduce deflection", 'white', attrs=['bold']))
-    elif beam_type == "Simple" and span_ratio > 1/360:
-        print(colored("│ Recommendation:", 'yellow') + 
-              colored(" Consider increasing section moment of inertia", 'white', attrs=['bold']))
-    
-    print(colored("│", 'yellow'))
-    print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-    
-    print("\n")
-    print(colored("┌─ VISUALIZATION OPTIONS "+"─"*39, 'cyan', attrs=['bold']))
-    print(colored("│", 'cyan'))
-    print(colored("│ To visualize deflection:", 'cyan'))
-    print(colored("│  1. Navigate to Postprocessing/Visualization menu", 'cyan'))
-    print(colored("│  2. Select option for Deflection Plots", 'cyan'))
-    print(colored("│  3. Choose between Matplotlib or Plotly visualization", 'cyan'))
-    print(colored("│", 'cyan'))
-    print(colored("└" + "─"*62, 'cyan', attrs=['bold']))
-    
-    print("\n")
-    input(colored("Press Enter to return to the Analysis/Simulation menu...", 'cyan', attrs=['bold']))
-
-def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b, 
-                          y_array, Total_ShearForce, Total_BendingMoment, 
-                          Shear_stress, Max_Shear_stress, bending_stress, 
-                          Max_bending_stress, FOS, units=METRIC_UNITS):
-    """
-    Display stress analysis results in a professional FEA-like format.
-    
-    Parameters:
-    -----------
-    beam_type: str
-        Type of beam ("Simple" or "Cantilever")
-    shape: str
-        Name of the profile shape
-    selected_material: dict
-        Dictionary containing material properties
-    Ix: float
-        Moment of inertia in m⁴
-    c: float
-        Distance from neutral axis to extreme fiber in m
-    b: float
-        Representative width in m
-    y_array: ndarray
-        Array of y-coordinates for stress calculations
-    Total_ShearForce: ndarray
-        Array of shear force values along the beam
-    Total_BendingMoment: ndarray
-        Array of bending moment values along the beam
-    Shear_stress: ndarray
-        Array or matrix of shear stress values
-    Max_Shear_stress: float
-        Maximum shear stress value
-    bending_stress: ndarray
-        Array of bending stress values
-    Max_bending_stress: float
-        Maximum bending stress value
-    FOS: float
-        Factor of safety against yielding
-    """
+def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, Ix, Deflection, Slope, curv, units=METRIC_UNITS):
+    """Commercial-grade serviceability (deflection) report with limit-state
+    demand/capacity bars against L/240, L/360 and L/480 criteria."""
     clear_screen()
     len_div = get_divisor(units, 'length')
+    small_len_div = get_divisor(units, 'length_small')
+
+    max_defl_idx = int(np.argmax(np.abs(Deflection)))
+    max_defl = Deflection[max_defl_idx]
+    max_defl_pos = max_defl_idx * (beam_length / (len(Deflection) - 1))
+    max_defl_abs = abs(max_defl)
+
+    max_slope_idx = int(np.argmax(np.abs(Slope)))
+    max_slope = Slope[max_slope_idx]
+    max_slope_pos = max_slope_idx * (beam_length / (len(Slope) - 1))
+
+    max_curv_idx = int(np.argmax(np.abs(curv)))
+    max_curv = curv[max_curv_idx]
+    max_curv_pos = max_curv_idx * (beam_length / (len(curv) - 1))
+
+    span_ratio = max_defl_abs / beam_length if beam_length else 0.0
+    inv_ratio = (1.0 / span_ratio) if span_ratio > 0 else float('inf')
+
+    ui_banner("SERVICEABILITY  \u2014  DEFLECTION ANALYSIS",
+              "Euler\u2013Bernoulli  \u2022  Limit-State Verification", color='cyan')
+
+    # ---- Solution parameters --------------------------------------------
+    print("\n")
+    ui_open("SOLUTION PARAMETERS", 'blue')
+    ui_blank('blue')
+    ui_field("Beam theory", "Euler\u2013Bernoulli (small deflection)", 'blue', 'blue')
+    ui_field("Integration scheme", "Numerical (double integration of M/EI)", 'blue', 'blue')
+    ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
+    ui_field("Span length  L", f"{beam_length / len_div:.3f} {units['length']}", 'blue', 'blue')
+    ui_field("Elastic modulus  E", f"{elastic_modulus/1e9:.1f} {units['modulus']}", 'blue', 'blue')
+    ui_field("Moment of inertia  I", f"{Ix:.4e} {units['inertia']}", 'blue', 'blue')
+    ui_field("Flexural rigidity  EI", f"{elastic_modulus*Ix:.3e} N\u00b7m\u00b2", 'blue', 'blue')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ---- Deflection results ---------------------------------------------
+    if max_defl_abs < 1e-3:
+        defl_disp = f"{max_defl / small_len_div:.4f} {units['length_small']}"
+    else:
+        defl_disp = f"{max_defl / len_div:.6f} {units['length']}"
+    arrow = "\u2191 (up)" if max_defl > 0 else "\u2193 (down)"
+
+    print("\n")
+    ui_open("DEFLECTION RESULTS", 'green')
+    ui_blank('green')
+    ui_field("Maximum deflection  \u03b4max", f"{defl_disp}  {arrow}", 'green', 'green')
+    ui_field("Location of \u03b4max", f"x = {max_defl_pos / len_div:.3f} {units['length']}", 'green', 'green')
+    ui_field("Span/deflection ratio", f"L / {inv_ratio:.0f}", 'green', 'green')
+    ui_blank('green')
+    ui_close('green')
+
+    # ---- Limit-state serviceability checks ------------------------------
+    print("\n")
+    ui_open("SERVICEABILITY LIMIT-STATE CHECKS  (demand / capacity)", 'magenta')
+    ui_blank('magenta')
+    criteria = [
+        ("L/240  (roof, no ceiling)", 240.0),
+        ("L/360  (general / floors)", 360.0),
+        ("L/480  (brittle finishes)", 480.0),
+    ]
+    for label, denom in criteria:
+        allow = beam_length / denom
+        dc = (max_defl_abs / allow) if allow > 0 else 0.0
+        ui_check_row(label, dc)
+    ui_blank('magenta')
+    ui_text("D/C = actual deflection \u00f7 code deflection limit. \u2264 1.00 passes.", 'white', 'magenta')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ---- Additional deformation parameters ------------------------------
+    print("\n")
+    ui_open("ROTATION & CURVATURE", 'blue')
+    ui_blank('blue')
+    ui_field("Maximum slope  \u03b8max", f"{max_slope:.6f} rad  ({np.degrees(max_slope):.3f}\u00b0)", 'blue', 'blue')
+    ui_field("Location of \u03b8max", f"x = {max_slope_pos / len_div:.3f} {units['length']}", 'blue', 'blue')
+    ui_field("Maximum curvature  \u03ba", f"{max_curv:.4e} 1/{units['length']}", 'blue', 'blue')
+    ui_field("Location of \u03bamax", f"x = {max_curv_pos / len_div:.3f} {units['length']}", 'blue', 'blue')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ---- Engineering interpretation -------------------------------------
+    if span_ratio < 1/500:
+        verdict = "Very stiff \u2014 suitable for precision / vibration-sensitive use."
+    elif span_ratio < 1/360:
+        verdict = "Stiff \u2014 satisfies general building serviceability (L/360)."
+    elif span_ratio < 1/240:
+        verdict = "Moderate \u2014 acceptable for roofs / non-brittle elements only."
+    else:
+        verdict = "Flexible \u2014 likely exceeds code limits; stiffening advised."
+
+    print("\n")
+    ui_open("ENGINEERING INTERPRETATION", 'yellow')
+    ui_blank('yellow')
+    ui_field("Serviceability verdict", verdict, 'yellow', 'yellow', width=22)
+    if beam_type == "Cantilever" and span_ratio > 1/180:
+        ui_bullet("Cantilever exceeds L/180 \u2014 increase section depth / inertia.", 'yellow', 'yellow')
+    elif beam_type == "Simple" and span_ratio > 1/360:
+        ui_bullet("Span exceeds L/360 \u2014 increase I or add intermediate support.", 'yellow', 'yellow')
+    ui_blank('yellow')
+    ui_close('yellow')
+
+    ui_footer("Press Enter to return to the Solution menu...")
+
+def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
+                          y_array, Total_ShearForce, Total_BendingMoment,
+                          Shear_stress, Max_Shear_stress, bending_stress,
+                          Max_bending_stress, FOS, units=METRIC_UNITS):
+    """Commercial-grade strength limit-state report: bending, shear, von Mises
+    combined stress, demand/capacity bars and factor-of-safety verdict."""
+    clear_screen()
     stress_div = get_divisor(units, 'stress')
     sec_mod_div = get_divisor(units, 'sec_mod')
-    inertia_div = get_divisor(units, 'inertia')  
-    # Calculate yield strength and other material properties
-    yield_strength = selected_material.get('Yield Strength', 0) * 1e6  # Convert MPa to Pa
-    poisson_ratio = selected_material.get('Poisson Ratio', 0.3)
-    
-    # Calculate additional metrics
-    section_modulus = Ix / c
-    allowable_stress = yield_strength / FOS
-    
-    # Calculate maximum combined stress using von Mises criterion
+    inertia_div = get_divisor(units, 'inertia')
+
+    yield_strength = selected_material.get('Yield Strength', 0) * 1e6  # MPa -> Pa
+    section_modulus = Ix / c if c else 0.0
+    allowable_stress = (yield_strength / FOS) if FOS else 0.0
+
     tau_max = Max_Shear_stress
     sigma_max = Max_bending_stress
-    von_mises_stress = np.sqrt(sigma_max**2 + 3*tau_max**2)
-    
-    # Find critical locations
-    max_sf_idx = np.argmax(np.abs(Total_ShearForce))
-    max_sf_loc = max_sf_idx * (len(Total_ShearForce) - 1)
-    
-    max_bm_idx = np.argmax(np.abs(Total_BendingMoment))
-    max_bm_loc = max_bm_idx * (len(Total_BendingMoment) - 1)
-    
-    # Create decorative header
+    von_mises = np.sqrt(sigma_max**2 + 3 * tau_max**2)
+
+    n = len(Total_BendingMoment)
+    bm_frac = int(np.argmax(np.abs(Total_BendingMoment))) / max(1, (n - 1))
+    sf_frac = int(np.argmax(np.abs(Total_ShearForce))) / max(1, (n - 1))
+
+    # demand/capacity ratios
+    dc_bending = (sigma_max / yield_strength) if yield_strength else 0.0
+    dc_shear = (tau_max / (0.577 * yield_strength)) if yield_strength else 0.0  # von Mises shear yield
+    dc_vm = (von_mises / yield_strength) if yield_strength else 0.0
+
+    ui_banner("STRENGTH  \u2014  STRESS & FACTOR OF SAFETY",
+              "\u03c3 = My/I  \u2022  \u03c4 = VQ/Ib  \u2022  von Mises", color='cyan')
+
+    # ---- Analysis parameters --------------------------------------------
     print("\n")
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║              STRESS ANALYSIS & FACTOR OF SAFETY              ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    
-    # Analysis parameters
+    ui_open("ANALYSIS PARAMETERS", 'blue')
+    ui_blank('blue')
+    ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
+    ui_field("Cross-section", f"{shape}", 'blue', 'blue')
+    ui_field("Material", f"{selected_material.get('Material', 'Unknown')}", 'blue', 'blue')
+    ui_field("Yield strength  Fy", f"{yield_strength / stress_div:.2f} {units['stress']}", 'blue', 'blue')
+    ui_field("Section modulus  S", f"{section_modulus / sec_mod_div:.4e} {units['sec_mod']}", 'blue', 'blue')
+    ui_field("Moment of inertia  I", f"{Ix / inertia_div:.4e} {units['inertia']}", 'blue', 'blue')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ---- Computed stress state ------------------------------------------
     print("\n")
-    print(colored("┌─ ANALYSIS PARAMETERS "+"─"*39, 'blue', attrs=['bold']))
-    print(colored("│", 'blue'))
-    print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Cross-Section:", 'blue') + colored(f" {shape}", 'white'))
-    print(colored("│ Material:", 'blue') + colored(f" {selected_material.get('Material', 'Unknown')}", 'white'))
-    print(colored("│ Yield Strength:", 'blue') + colored(f" {yield_strength / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
-    print(colored("│ Section Modulus:", 'blue') + colored(f" {section_modulus / sec_mod_div:.6e} {units['sec_mod']}", 'white')) # <-- CHANGED
-    print(colored("│ Moment of Inertia:", 'blue') + colored(f" {Ix / inertia_div:.6e} {units['inertia']}", 'white')) # <-- CHANGED
-    print(colored("│", 'blue'))
-    print(colored("└" + "─"*62, 'blue', attrs=['bold']))
-    
-    # Stress results
+    ui_open("COMPUTED STRESS STATE", 'green')
+    ui_blank('green')
+    ui_head("Bending (normal) stress  \u03c3", 'green', 'green')
+    ui_field("Maximum |\u03c3|", f"{sigma_max / stress_div:.2f} {units['stress']}", 'green', 'green', bullet="\u2022")
+    ui_field("Location", f"x \u2248 {bm_frac:.2f}\u00b7L", 'green', 'green', bullet="\u2022")
+    ui_blank('green')
+    ui_head("Transverse shear stress  \u03c4", 'green', 'green')
+    ui_field("Maximum |\u03c4|", f"{tau_max / stress_div:.2f} {units['stress']}", 'green', 'green', bullet="\u2022")
+    ui_field("Location", f"x \u2248 {sf_frac:.2f}\u00b7L", 'green', 'green', bullet="\u2022")
+    ui_blank('green')
+    ui_head("Combined stress  (von Mises)  \u03c3ᵥ", 'green', 'green')
+    ui_field("Maximum \u03c3ᵥ", f"{von_mises / stress_div:.2f} {units['stress']}", 'green', 'green', bullet="\u2022")
+    ui_field("Fraction of yield", f"{dc_vm*100:.1f}% of Fy", 'green', 'green', bullet="\u2022")
+    ui_blank('green')
+    ui_close('green')
+
+    # ---- Strength limit-state checks ------------------------------------
     print("\n")
-    print(colored("┌─ STRESS ANALYSIS RESULTS "+"─"*36, 'green', attrs=['bold']))
-    print(colored("│", 'green'))
-    
-    # Bending stress
-    print(colored("│ BENDING STRESS (Normal Stress)", 'green', attrs=['bold']))
-    print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {Max_bending_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
-    print(colored("│  • Location:", 'green') + 
-          colored(f" x = {max_bm_loc / len_div:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│  • Extreme Fiber Distance:", 'green') + 
-          colored(f" {c / len_div:.4f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│", 'green'))
-    
-    # Shear stress
-    print(colored("│ SHEAR STRESS", 'green', attrs=['bold']))
-    print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {Max_Shear_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
-    print(colored("│  • Location:", 'green') + 
-          colored(f" x = {max_sf_loc / len_div:.3f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│  • Representative Width:", 'green') + 
-          colored(f" {b / len_div:.4f} {units['length']}", 'white')) # <-- CHANGED
-    print(colored("│", 'green'))
-    
-    # Combined stress
-    print(colored("│ COMBINED STRESS (von Mises)", 'green', attrs=['bold']))
-    print(colored("│  • Maximum Value:", 'green') + 
-          colored(f" {von_mises_stress / stress_div:.2f} {units['stress']}", 'white')) # <-- CHANGED
-    print(colored("│  • Percentage of Yield:", 'green') + 
-          colored(f" {(von_mises_stress/yield_strength)*100:.1f}%", 'white'))
-    print(colored("│", 'green'))
-    print(colored("└" + "─"*62, 'green', attrs=['bold']))
-    
-    # Factor of safety
-    print("\n")
-    print(colored("┌─ FACTOR OF SAFETY ANALYSIS "+"─"*35, 'magenta', attrs=['bold']))
-    print(colored("│", 'magenta'))
-    print(colored("│ Factor of Safety (FOS):", 'magenta') + 
-          colored(f" {FOS:.2f}", 'white', attrs=['bold']))
-    print(colored("│ Allowable Stress:", 'magenta') + 
-          colored(f" {allowable_stress / stress_div:.2f} {units['stress']}", 'white'))
-    print(colored("│", 'magenta'))
-    
-    # FOS interpretation
+    ui_open("STRENGTH LIMIT-STATE CHECKS  (demand / capacity)", 'magenta')
+    ui_blank('magenta')
+    ui_check_row("Bending  \u03c3 / Fy", dc_bending)
+    ui_check_row("Shear  \u03c4 / 0.577Fy", dc_shear)
+    ui_check_row("von Mises  \u03c3ᵥ / Fy", dc_vm)
+    ui_blank('magenta')
+    ui_text("Capacity = material yield (Fy). D/C \u2264 1.00 means no yielding.", 'white', 'magenta')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ---- Factor of safety ------------------------------------------------
     if FOS >= 2.0:
-        safety_status = "EXCELLENT ✓"
-        safety_color = 'green'
-        safety_message = "Design has high margin of safety"
+        s_status, s_col, s_msg = "EXCELLENT \u2713", 'green', "High margin of safety."
     elif FOS >= 1.5:
-        safety_status = "GOOD ✓"
-        safety_color = 'green'
-        safety_message = "Design meets standard safety requirements"
+        s_status, s_col, s_msg = "GOOD \u2713", 'green', "Meets standard structural requirements."
     elif FOS >= 1.0:
-        safety_status = "ACCEPTABLE ✓"
-        safety_color = 'yellow'
-        safety_message = "Design is safe but has limited margin"
+        s_status, s_col, s_msg = "MARGINAL \u26a0", 'yellow', "Safe but limited reserve \u2014 review loads."
     else:
-        safety_status = "UNSAFE ✗"
-        safety_color = 'red'
-        safety_message = "Design may fail under expected loads"
-    
-    print(colored("│ Safety Status:", 'magenta') + 
-          colored(f" {safety_status}", safety_color, attrs=['bold']))
-    print(colored("│ Assessment:", 'magenta') + 
-          colored(f" {safety_message}", 'white'))
-    print(colored("│", 'magenta'))
-    print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
-    
-    # Engineering guidelines
+        s_status, s_col, s_msg = "UNSAFE \u2717", 'red', "Predicted yielding under design loads."
+
     print("\n")
-    print(colored("┌─ ENGINEERING GUIDELINES "+"─"*37, 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    print(colored("│ Recommended FOS by Application:", 'yellow', attrs=['bold']))
-    print(colored("│  • 1.25 - 1.5: Standard structural applications", 'yellow'))
-    print(colored("│  • 1.5 - 2.0: Critical structural components", 'yellow'))
-    print(colored("│  • 2.0 - 3.0: Dynamic loading conditions", 'yellow'))
-    print(colored("│  • 3.0+: Safety-critical or high-uncertainty applications", 'yellow'))
-    print(colored("│", 'yellow'))
-    
-    # Recommendations based on FOS
-    print(colored("│ Design Recommendations:", 'yellow', attrs=['bold']))
+    ui_open("FACTOR OF SAFETY", 'magenta')
+    ui_blank('magenta')
+    ui_field("Factor of safety  (Fy/\u03c3)", f"{FOS:.2f}", 'magenta', 'magenta', value_color=s_col)
+    ui_field("Allowable stress", f"{allowable_stress / stress_div:.2f} {units['stress']}", 'magenta', 'magenta')
+    ui_field("Safety status", s_status, 'magenta', 'magenta', value_color=s_col)
+    ui_field("Assessment", s_msg, 'magenta', 'magenta')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ---- Design guidance -------------------------------------------------
+    print("\n")
+    ui_open("DESIGN GUIDANCE", 'yellow')
+    ui_blank('yellow')
+    ui_head("Recommended FoS by application:", 'yellow', 'yellow')
+    ui_bullet("1.25 \u2013 1.50 : routine static structural members", 'yellow', 'yellow')
+    ui_bullet("1.50 \u2013 2.00 : critical / primary load paths", 'yellow', 'yellow')
+    ui_bullet("2.00 \u2013 3.00 : dynamic, impact or cyclic loading", 'yellow', 'yellow')
+    ui_bullet("3.00+         : life-safety / high-uncertainty cases", 'yellow', 'yellow')
+    ui_blank('yellow')
+    ui_head("Action:", 'yellow', 'yellow')
     if FOS < 1.0:
-        print(colored("│  • CRITICAL: Redesign required to increase strength", 'yellow'))
-        print(colored("│  • Consider increasing section size or using stronger material", 'yellow'))
+        ui_bullet("CRITICAL \u2014 increase section size or upgrade material.", 'yellow', 'yellow', mark="\u2717")
     elif FOS < 1.5:
-        print(colored("│  • Consider design improvements if application is critical", 'yellow'))
-        print(colored("│  • Verify loading assumptions and boundary conditions", 'yellow'))
+        ui_bullet("Improve section if member is critical; verify load model.", 'yellow', 'yellow', mark="\u26a0")
+    elif FOS > 2.5:
+        ui_bullet("Over-designed \u2014 consider lighter section to save weight/cost.", 'yellow', 'yellow', mark="\u2193")
     else:
-        print(colored("│  • Design meets safety requirements", 'yellow'))
-        print(colored("│  • Consider weight/cost optimization if FOS > 2.5", 'yellow'))
-    
-    print(colored("│", 'yellow'))
-    print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-    
-    # Failure theories and next steps
-    print("\n")
-    print(colored("┌─ ADDITIONAL INFORMATION "+"─"*38, 'cyan', attrs=['bold']))
-    print(colored("│", 'cyan'))
-    print(colored("│ Analysis Method:", 'cyan'))
-    print(colored("│  • Normal stress calculated using 𝜎 = My/I", 'cyan'))
-    print(colored("│  • Shear stress calculated using 𝜏 = VQ/(Ib)", 'cyan'))
-    print(colored("│  • Combined stress using von Mises theory", 'cyan'))
-    print(colored("│", 'cyan'))
-    print(colored("│ Visualization Options:", 'cyan'))
-    print(colored("│  • View stress distribution in the Postprocessing menu", 'cyan'))
-    print(colored("│", 'cyan'))
-    print(colored("└" + "─"*62, 'cyan', attrs=['bold']))
-    
-    print("\n")
-    input(colored("Press Enter to return to the Analysis/Simulation menu...", 'cyan', attrs=['bold']))
+        ui_bullet("Design meets strength requirements with appropriate reserve.", 'yellow', 'yellow', mark="\u2713")
+    ui_blank('yellow')
+    ui_close('yellow')
+
+    ui_footer("Press Enter to return to the Solution menu...")
 
 def display_engineering_recommendations(beam_type, shape, beam_length, selected_material,
-                                      Ix, c, b, FOS=None, max_stress=None, max_defl=None, 
+                                      Ix, c, b, FOS=None, max_stress=None, max_defl=None,
                                       span_ratio=None, yield_strength=None):
-    """
-    Display professional engineering recommendations based on analysis results.
-    This function provides guidance on design improvements and highlights potential issues.
-    
-    Parameters:
-    -----------
-    beam_type: str
-        Type of beam ("Simple" or "Cantilever")
-    shape: str
-        Name of the profile shape
-    beam_length: float
-        Length of the beam in meters
-    selected_material: dict
-        Dictionary containing material properties
-    Ix: float
-        Moment of inertia in m⁴
-    c: float
-        Distance from neutral axis to extreme fiber in m
-    b: float
-        Representative width in m
-    FOS: float
-        Factor of safety against yielding
-    max_stress: float
-        Maximum stress value in Pa
-    max_defl: float
-        Maximum deflection value in m
-    span_ratio: float
-        Ratio of maximum deflection to beam length
-    yield_strength: float
-        Material yield strength in Pa
+    """Commercial-grade structural design-check & recommendation report.
+
+    Consolidates the strength and serviceability limit states into a single
+    verification dossier: executive verdict, demand/capacity matrix, governing
+    limit state, prioritised remediation with quantitative sizing targets,
+    section optimisation, stability/secondary effects, and applicable codes.
+
+    Units (SI): beam_length [m], Ix [m^4], c,b [m], max_stress/yield_strength [Pa],
+    max_defl [m], span_ratio [-], FOS [-].
     """
     clear_screen()
-    
-    # Create decorative header
+
+    # ------------------------------------------------------------------ #
+    #  DERIVED ENGINEERING QUANTITIES
+    # ------------------------------------------------------------------ #
+    TARGET_FOS = 1.50          # target strength reserve
+    DEFL_LIMIT_DENOM = 360.0   # governing serviceability criterion (L/360)
+
+    section_modulus = (Ix / c) if c else 0.0
+    depth = 2.0 * c if c else 0.0
+    mat_name = selected_material.get('Material', 'Unknown') if selected_material else 'Unknown'
+    yield_MPa = (yield_strength / 1e6) if yield_strength else None
+
+    # --- Demand / capacity ratios (None where data unavailable) -------- #
+    dc_strength = (max_stress / yield_strength) if (max_stress and yield_strength) else None
+    allow_defl = (beam_length / DEFL_LIMIT_DENOM) if beam_length else None
+    dc_defl = (abs(max_defl) / allow_defl) if (max_defl is not None and allow_defl) else None
+    dc_fos = (TARGET_FOS / FOS) if FOS else None   # >1.0 => below target reserve
+    inv_span = (1.0 / span_ratio) if span_ratio else None
+
+    have_data = any(v is not None for v in (dc_strength, dc_defl, FOS))
+
+    # --- Overall verdict ---------------------------------------------- #
+    governing_name, governing_dc = None, 0.0
+    for nm, dc in (("Strength (yield)", dc_strength),
+                   ("Serviceability (L/360)", dc_defl),
+                   ("Strength reserve (FoS)", dc_fos)):
+        if dc is not None and dc > governing_dc:
+            governing_name, governing_dc = nm, dc
+
+    if not have_data:
+        verdict = 'INCOMPLETE'
+    elif (dc_strength is not None and dc_strength > 1.0) or \
+         (dc_defl is not None and dc_defl > 1.0) or (FOS is not None and FOS < 1.0):
+        verdict = 'FAIL'
+    elif governing_dc > 0.90 or (FOS is not None and FOS < TARGET_FOS):
+        verdict = 'REVIEW'
+    else:
+        verdict = 'PASS'
+
+    ui_banner("ENGINEERING DESIGN-CHECK REPORT",
+              "Limit-State Verification \u2022 Optimisation \u2022 Code Compliance",
+              color='cyan')
+
+    # ================================================================== #
+    #  0. EXECUTIVE VERDICT
+    # ================================================================== #
+    label, vcol = ui_verdict_badge(verdict)
     print("\n")
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║            ENGINEERING DESIGN RECOMMENDATIONS                ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    
-    # Model summary
+    ui_open("EXECUTIVE VERDICT", vcol)
+    ui_blank(vcol)
+    print(colored("\u2502   ", vcol) + colored(f" {label} ", vcol, attrs=['bold', 'reverse']))
+    ui_blank(vcol)
+    if governing_name:
+        ui_field("Governing limit state", governing_name, vcol, vcol, value_color='white')
+        ui_field("Controlling utilisation", f"{governing_dc*100:.1f}%  (D/C = {governing_dc:.2f})",
+                 vcol, vcol, value_color='white')
+        reserve = (1.0 - governing_dc) * 100.0
+        ui_field("Remaining reserve", f"{reserve:+.1f}%", vcol, vcol, value_color='white')
+    else:
+        ui_text("Run Stress (FoS) and Deflection checks for a full verdict.", 'white', vcol)
+    ui_blank(vcol)
+    ui_close(vcol)
+
+    # ================================================================== #
+    #  1. MODEL & SECTION SUMMARY
+    # ================================================================== #
     print("\n")
-    print(colored("┌─ MODEL SUMMARY "+"─"*44, 'blue', attrs=['bold']))
-    print(colored("│", 'blue'))
-    print(colored("│ Beam Type:", 'blue') + colored(f" {beam_type} Beam", 'white'))
-    print(colored("│ Cross-Section:", 'blue') + colored(f" {shape}", 'white'))
-    print(colored("│ Beam Length:", 'blue') + colored(f" {beam_length:.3f} m", 'white'))
-    print(colored("│ Material:", 'blue') + colored(f" {selected_material.get('Material', 'Unknown')}", 'white'))
-    
+    ui_open("MODEL & SECTION SUMMARY", 'blue')
+    ui_blank('blue')
+    ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
+    ui_field("Cross-section", f"{shape}", 'blue', 'blue')
+    ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
+    ui_field("Material", f"{mat_name}" + (f"  (Fy = {yield_MPa:.0f} MPa)" if yield_MPa else ""), 'blue', 'blue')
     if Ix is not None:
-        print(colored("│ Moment of Inertia:", 'blue') + colored(f" {Ix:.6e} m⁴", 'white'))
-    if c is not None:
-        print(colored("│ Section Height (2c):", 'blue') + colored(f" {2*c:.4f} m", 'white'))
-    
-    print(colored("│", 'blue'))
-    print(colored("└" + "─"*62, 'blue', attrs=['bold']))
-    
-    # Assessment of current design
+        ui_field("Moment of inertia  I", f"{Ix:.4e} m\u2074", 'blue', 'blue')
+    if section_modulus:
+        ui_field("Section modulus  S", f"{section_modulus:.4e} m\u00b3", 'blue', 'blue')
+    if depth:
+        ui_field("Section depth  (2c)", f"{depth:.4f} m", 'blue', 'blue')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ================================================================== #
+    #  2. LIMIT-STATE VERIFICATION MATRIX
+    # ================================================================== #
     print("\n")
-    print(colored("┌─ DESIGN ASSESSMENT "+"─"*41, 'green', attrs=['bold']))
-    print(colored("│", 'green'))
-    
-    design_issues = []
-    design_strengths = []
-    
-    # Safety assessment
+    ui_open("LIMIT-STATE VERIFICATION MATRIX", 'magenta')
+    ui_blank('magenta')
+    if dc_strength is not None:
+        ui_check_row("Strength  \u03c3/Fy", dc_strength)
+    if dc_defl is not None:
+        ui_check_row("Service  \u03b4/(L/360)", dc_defl)
+    if dc_fos is not None:
+        # show FoS adequacy: PASS when FOS>=target  (dc_fos<=1)
+        ui_check_row("FoS  (1.5/FoS)", dc_fos,
+                     status_text=("PASS \u2713" if FOS >= TARGET_FOS else
+                                  ("MARGINAL \u26a0" if FOS >= 1.0 else "FAIL \u2717")))
+    if dc_strength is None and dc_defl is None and dc_fos is None:
+        ui_text("No quantitative results yet \u2014 complete the Solution checks.", 'white', 'magenta')
+    ui_blank('magenta')
+    ui_text("Bar fill = utilisation. Green \u2264 75%, Amber \u2264 95%, Red > 95%.", 'white', 'magenta')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ================================================================== #
+    #  3. DESIGN ASSESSMENT (strengths / concerns)
+    # ================================================================== #
+    strengths, concerns = [], []
     if FOS is not None:
         if FOS < 1.0:
-            design_issues.append(f"Factor of Safety is critically low ({FOS:.2f})")
-            design_issues.append("Structure may fail under expected loads")
-        elif FOS < 1.5:
-            design_issues.append(f"Factor of Safety ({FOS:.2f}) is below recommended value for most applications")
+            concerns.append(f"Factor of safety critically low (FoS = {FOS:.2f}) \u2014 yielding predicted")
+        elif FOS < TARGET_FOS:
+            concerns.append(f"Factor of safety {FOS:.2f} is below the {TARGET_FOS:.2f} target")
         else:
-            design_strengths.append(f"Good Factor of Safety ({FOS:.2f})")
-    
-    # Deflection assessment
-    if span_ratio is not None:
-        if span_ratio > 1/180:  # Very large deflection
-            design_issues.append(f"Excessive deflection (L/{1/span_ratio:.0f})")
-            design_issues.append("Structure may experience serviceability issues")
-        elif span_ratio > 1/360:  # Large but potentially acceptable
-            design_issues.append(f"Significant deflection (L/{1/span_ratio:.0f})")
+            strengths.append(f"Adequate strength reserve (FoS = {FOS:.2f})")
+    if span_ratio is not None and inv_span:
+        if span_ratio > 1/180:
+            concerns.append(f"Excessive deflection (L/{inv_span:.0f}) \u2014 serviceability at risk")
+        elif span_ratio > 1/360:
+            concerns.append(f"Deflection L/{inv_span:.0f} exceeds the L/360 floor criterion")
         else:
-            design_strengths.append(f"Acceptable deflection (L/{1/span_ratio:.0f})")
-    
-    # Stress assessment
-    if max_stress is not None and yield_strength is not None:
-        stress_ratio = max_stress / yield_strength
-        if stress_ratio > 0.9:
-            design_issues.append(f"Stress is at {stress_ratio*100:.1f}% of material yield strength")
-        elif stress_ratio > 0.67:
-            design_issues.append(f"Moderately high stress ({stress_ratio*100:.1f}% of yield)")
+            strengths.append(f"Deflection within limits (L/{inv_span:.0f})")
+    if dc_strength is not None:
+        if dc_strength > 0.90:
+            concerns.append(f"Bending stress at {dc_strength*100:.0f}% of yield \u2014 little margin")
+        elif dc_strength > 0.67:
+            concerns.append(f"Moderately high bending stress ({dc_strength*100:.0f}% of yield)")
         else:
-            design_strengths.append(f"Acceptable stress level ({stress_ratio*100:.1f}% of yield)")
-    
-    # Profile assessment
-    if shape == "I-beam" or shape == "T-beam":
-        design_strengths.append("Efficient cross-section for bending about major axis")
+            strengths.append(f"Comfortable bending stress level ({dc_strength*100:.0f}% of yield)")
+    # section morphology
+    if shape in ("I-beam", "T-beam"):
+        strengths.append("Efficient section for major-axis bending (high I per unit mass)")
     elif "Circle" in shape:
-        design_strengths.append("Good torsional resistance")
+        strengths.append("Isotropic / good torsional resistance")
         if beam_type == "Cantilever":
-            design_issues.append("Circular sections are not optimal for cantilever bending")
-    elif "Rectangle" in shape or "Square" in shape:
-        if "Hollow" not in shape:
-            design_issues.append("Solid rectangular sections have less efficient material utilization")
+            concerns.append("Circular sections are sub-optimal for cantilever bending")
+    elif ("Rectangle" in shape or "Square" in shape):
+        if "Hollow" in shape:
+            strengths.append("Hollow box \u2014 good combined bending + torsion efficiency")
         else:
-            design_strengths.append("Good combination of bending and torsional resistance")
-    
-    # Specific beam type considerations
-    if beam_type == "Cantilever":
-        if beam_length > 10 and "Hollow" not in shape:
-            design_issues.append("Long cantilever may require hollow section for weight reduction")
-    
-    # Print strengths
-    if design_strengths:
-        print(colored("│ Design Strengths:", 'green', attrs=['bold']))
-        for strength in design_strengths:
-            print(colored(f"│  ✓ {strength}", 'green'))
-        print(colored("│", 'green'))
-    
-    # Print issues
-    if design_issues:
-        print(colored("│ Design Issues:", 'yellow', attrs=['bold']))
-        for issue in design_issues:
-            print(colored(f"│  ⚠ {issue}", 'yellow'))
-        print(colored("│", 'green'))
-    
-    if not design_issues and not design_strengths:
-        print(colored("│  No specific design assessment available. Complete all analyses first.", 'white'))
-        print(colored("│", 'green'))
-    
-    print(colored("└" + "─"*62, 'green', attrs=['bold']))
-    
-    # Recommended improvements
+            concerns.append("Solid rectangular/square \u2014 inefficient material utilisation")
+    if beam_type == "Cantilever" and beam_length > 10 and "Hollow" not in shape:
+        concerns.append("Long cantilever \u2014 consider hollow section for weight control")
+
     print("\n")
-    print(colored("┌─ RECOMMENDED IMPROVEMENTS "+"─"*35, 'magenta', attrs=['bold']))
-    print(colored("│", 'magenta'))
-    
-    improvements = []
-    
-    # Generate recommendations based on identified issues
-    if FOS is not None and FOS < 1.5:
-        if shape == "I-beam":
-            improvements.append("Increase flange width or web height")
-        elif shape == "T-beam":
-            improvements.append("Increase flange width or web height")
+    ui_open("DESIGN ASSESSMENT", 'green')
+    ui_blank('green')
+    if strengths:
+        ui_head("Strengths", 'green', 'green')
+        for s in strengths:
+            ui_bullet(s, 'green', 'green', mark="\u2713")
+        ui_blank('green')
+    if concerns:
+        ui_head("Concerns", 'yellow', 'green')
+        for c_ in concerns:
+            ui_bullet(c_, 'yellow', 'green', mark="\u26a0")
+        ui_blank('green')
+    if not strengths and not concerns:
+        ui_text("Complete all analyses to populate the design assessment.", 'white', 'green')
+        ui_blank('green')
+    ui_close('green')
+
+    # ================================================================== #
+    #  4. PRIORITISED RECOMMENDED ACTIONS  (with quantitative targets)
+    # ================================================================== #
+    p1, p2, p3 = [], [], []   # P1 critical/strength, P2 serviceability, P3 optimisation
+
+    # ---- P1: strength -------------------------------------------------
+    if FOS is not None and FOS < TARGET_FOS and section_modulus:
+        s_req = section_modulus * (TARGET_FOS / FOS)
+        inc = (s_req / section_modulus - 1.0) * 100.0
+        p1.append(f"Raise section modulus to S \u2265 {s_req:.3e} m\u00b3 "
+                  f"(+{inc:.0f}%) to reach FoS = {TARGET_FOS:.2f}")
+        if shape in ("I-beam", "T-beam"):
+            p1.append("Increase web height (most effective) or flange area")
         elif "Circle" in shape:
-            improvements.append("Increase diameter")
-        elif "Rectangle" in shape or "Square" in shape:
-            if "Hollow" not in shape:
-                improvements.append("Consider switching to a hollow section or I-beam")
-            else:
-                improvements.append("Increase section dimensions or wall thickness")
-        
-        # Material recommendation
-        current_yield = selected_material.get('Yield Strength', 0)
-        improvements.append(f"Consider using a stronger material (current yield: {current_yield} MPa)")
-    
-    if span_ratio is not None and span_ratio > 1/360:
-        improvements.append(f"Increase section moment of inertia to reduce deflection")
-        if beam_type == "Simple":
-            improvements.append("Consider adding intermediate supports if possible")
-    
-    # Profile-specific recommendations
-    if shape == "Rectangle" and "Hollow" not in shape:
-        improvements.append("Reorient section to have larger height than width")
-        improvements.append("Consider switching to I-beam for more efficient material usage")
-    
-    # Beam-type specific recommendations
-    if beam_type == "Cantilever" and beam_length > 5:
-        improvements.append("Consider tapered design with larger section at support")
-    
-    # Print improvements
-    if improvements:
-        for improvement in improvements:
-            print(colored(f"│  • {improvement}", 'magenta'))
-    else:
-        print(colored("│  Current design appears adequate based on available analysis", 'white'))
-        if FOS is None or span_ratio is None:
-            print(colored("│  Complete stress and deflection analyses for more recommendations", 'white'))
-    
-    print(colored("│", 'magenta'))
-    print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
-    
-    # Advanced optimization suggestions
-    print("\n")
-    print(colored("┌─ ADVANCED OPTIMIZATION POSSIBILITIES "+"─"*26, 'yellow', attrs=['bold']))
-    print(colored("│", 'yellow'))
-    
-    # Generate advanced recommendations
-    if FOS is not None and FOS > 2.5:
-        print(colored("│ Weight Reduction Opportunities:", 'yellow', attrs=['bold']))
-        if "Hollow" not in shape:
-            print(colored("│  • Consider converting to hollow section (weight savings: ~30-40%)", 'yellow'))
+            p1.append("Increase diameter / wall thickness")
+        elif "Hollow" in shape:
+            p1.append("Increase overall depth or wall thickness")
         else:
-            print(colored("│  • Reduce section dimensions slightly (FOS has margin)", 'yellow'))
-    
-    print(colored("│", 'yellow'))
-    print(colored("│ Additional Analysis Recommended:", 'yellow', attrs=['bold']))
-    
-    if beam_type == "Simple":
-        print(colored("│  • Dynamic/vibration analysis for span > 3m", 'yellow'))
-    elif beam_type == "Cantilever":
-        print(colored("│  • Fatigue analysis if subjected to cyclic loading", 'yellow'))
-        print(colored("│  • Buckling analysis for slender cantilevers", 'yellow'))
-    
-    print(colored("│", 'yellow'))
-    print(colored("│ Manufacturing Considerations:", 'yellow', attrs=['bold']))
-    
-    if "beam" in shape.lower():
-        print(colored("│  • Check standard section sizes availability", 'yellow'))
-    elif "Hollow" in shape:
-        print(colored("│  • Consider ease of connection to other members", 'yellow'))
-    
-    print(colored("│", 'yellow'))
-    print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
-    
-    # Engineering codes and standards
+            p1.append("Switch to an I-section or hollow box for higher S per mass")
+        if yield_MPa:
+            p1.append(f"Alternative: upgrade material (current Fy = {yield_MPa:.0f} MPa)")
+
+    # ---- P2: serviceability ------------------------------------------
+    if dc_defl is not None and dc_defl > 1.0 and Ix:
+        i_req = Ix * dc_defl
+        inc = (dc_defl - 1.0) * 100.0
+        p2.append(f"Raise moment of inertia to I \u2265 {i_req:.3e} m\u2074 "
+                  f"(+{inc:.0f}%) to satisfy L/360")
+        if beam_type == "Simple":
+            p2.append("Or add an intermediate support to roughly quarter the deflection")
+        elif beam_type == "Cantilever":
+            p2.append("Or shorten the cantilever / add a back-span prop")
+    elif span_ratio is not None and span_ratio > 1/480:
+        p2.append("Deflection acceptable for general use; verify L/480 if brittle finishes apply")
+
+    # ---- P3: optimisation --------------------------------------------
+    if FOS is not None and FOS > 2.5:
+        if "Hollow" not in shape:
+            p3.append("Over-designed \u2014 convert to a hollow section (~30\u201340% mass saving)")
+        else:
+            p3.append("Over-designed \u2014 reduce wall thickness / depth while keeping FoS \u2265 1.5")
+    if shape == "Rectangle" and "Hollow" not in shape:
+        p3.append("Re-orient so depth > width to maximise I about the bending axis")
+    if not p3:
+        p3.append("Round selected dimensions up to the nearest standard mill size")
+
     print("\n")
-    print(colored("┌─ APPLICABLE CODES & STANDARDS "+"─"*32, 'cyan', attrs=['bold']))
-    print(colored("│", 'cyan'))
-    
-    print(colored("│ Design Standards:", 'cyan', attrs=['bold']))
-    if "Steel" in selected_material.get('Material', ''):
-        print(colored("│  • AISC 360 - Specification for Structural Steel Buildings", 'cyan'))
-        print(colored("│  • Eurocode 3 - Design of Steel Structures", 'cyan'))
-    elif "Aluminum" in selected_material.get('Material', ''):
-        print(colored("│  • Aluminum Design Manual", 'cyan'))
-        print(colored("│  • Eurocode 9 - Design of Aluminum Structures", 'cyan'))
-    elif "Concrete" in selected_material.get('Material', ''):
-        print(colored("│  • ACI 318 - Building Code Requirements for Structural Concrete", 'cyan'))
-        print(colored("│  • Eurocode 2 - Design of Concrete Structures", 'cyan'))
-    elif "Timber" in selected_material.get('Material', ''):
-        print(colored("│  • NDS - National Design Specification for Wood Construction", 'cyan'))
-        print(colored("│  • Eurocode 5 - Design of Timber Structures", 'cyan'))
+    ui_open("PRIORITISED RECOMMENDED ACTIONS", 'yellow')
+    ui_blank('yellow')
+    ui_head("P1 \u2014 Strength (address first)", 'red', 'yellow')
+    if p1:
+        for a in p1:
+            ui_bullet(a, 'white', 'yellow', mark="\u2776")
     else:
-        print(colored("│  • Check local building codes for your specific material", 'cyan'))
-    
-    print(colored("│", 'cyan'))
-    print(colored("│ Deflection Requirements:", 'cyan', attrs=['bold']))
-    print(colored("│  • L/360 for general structural applications", 'cyan'))
-    print(colored("│  • L/480 for members supporting brittle finishes", 'cyan'))
-    print(colored("│  • L/240 for roof members with no ceiling", 'cyan'))
-    
-    print(colored("│", 'cyan'))
-    print(colored("└" + "─"*62, 'cyan', attrs=['bold']))
-    
+        ui_bullet("No strength deficiency detected.", 'green', 'yellow', mark="\u2713")
+    ui_blank('yellow')
+    ui_head("P2 \u2014 Serviceability", 'yellow', 'yellow')
+    if p2:
+        for a in p2:
+            ui_bullet(a, 'white', 'yellow', mark="\u2777")
+    else:
+        ui_bullet("No serviceability deficiency detected.", 'green', 'yellow', mark="\u2713")
+    ui_blank('yellow')
+    ui_head("P3 \u2014 Optimisation & detailing", 'cyan', 'yellow')
+    for a in p3:
+        ui_bullet(a, 'white', 'yellow', mark="\u2778")
+    ui_blank('yellow')
+    ui_close('yellow')
+
+    # ================================================================== #
+    #  5. STABILITY & SECONDARY EFFECTS
+    # ================================================================== #
     print("\n")
-    input(colored("Press Enter to return to the main menu...", 'cyan', attrs=['bold']))
+    ui_open("STABILITY & SECONDARY EFFECTS", 'blue')
+    ui_blank('blue')
+    if shape in ("I-beam", "T-beam"):
+        ui_bullet("Check lateral-torsional buckling (LTB) \u2014 provide compression-flange bracing.", 'white', 'blue')
+        ui_bullet("Verify flange/web local buckling (section compactness, b/t & h/tw).", 'white', 'blue')
+    if "Hollow" in shape:
+        ui_bullet("HSS/box: check wall slenderness for local buckling under bending.", 'white', 'blue')
+    if beam_type == "Cantilever":
+        ui_bullet("Cantilever tip is unbraced \u2014 LTB and tip rotation often govern.", 'white', 'blue')
+    ui_bullet("Confirm web shear capacity and bearing/crippling at supports & point loads.", 'white', 'blue')
+    ui_bullet("Where applicable include P-\u0394 / second-order effects for slender members.", 'white', 'blue')
+    ui_blank('blue')
+    ui_close('blue')
+
+    # ================================================================== #
+    #  6. FATIGUE, DYNAMICS & DURABILITY
+    # ================================================================== #
+    print("\n")
+    ui_open("FATIGUE, DYNAMICS & DURABILITY", 'magenta')
+    ui_blank('magenta')
+    if beam_type == "Simple" and beam_length > 3:
+        ui_bullet("Span > 3 m \u2014 check natural frequency / walking vibration (target f\u2081 > 3\u20134 Hz).", 'white', 'magenta')
+    if beam_type == "Cantilever":
+        ui_bullet("If cyclically loaded, perform fatigue assessment of the fixed-end detail.", 'white', 'magenta')
+    ui_bullet("Apply corrosion allowance / protective coating per exposure category.", 'white', 'magenta')
+    ui_bullet("Account for temperature effects & thermal movement at connections.", 'white', 'magenta')
+    ui_blank('magenta')
+    ui_close('magenta')
+
+    # ================================================================== #
+    #  7. APPLICABLE CODES & STANDARDS
+    # ================================================================== #
+    print("\n")
+    ui_open("APPLICABLE CODES & STANDARDS", 'cyan')
+    ui_blank('cyan')
+    ui_head("Member design", 'cyan', 'cyan')
+    if "Steel" in mat_name:
+        ui_bullet("AISC 360 \u2014 Specification for Structural Steel Buildings (US)", 'cyan', 'cyan')
+        ui_bullet("EN 1993 (Eurocode 3) \u2014 Design of Steel Structures (EU)", 'cyan', 'cyan')
+    elif "Alumin" in mat_name or "Aluminum" in mat_name:
+        ui_bullet("Aluminum Design Manual / ADM (US)", 'cyan', 'cyan')
+        ui_bullet("EN 1999 (Eurocode 9) \u2014 Aluminium Structures (EU)", 'cyan', 'cyan')
+    elif "Concrete" in mat_name:
+        ui_bullet("ACI 318 \u2014 Building Code Requirements for Structural Concrete (US)", 'cyan', 'cyan')
+        ui_bullet("EN 1992 (Eurocode 2) \u2014 Concrete Structures (EU)", 'cyan', 'cyan')
+    elif "Timber" in mat_name or "Wood" in mat_name:
+        ui_bullet("NDS \u2014 National Design Specification for Wood Construction (US)", 'cyan', 'cyan')
+        ui_bullet("EN 1995 (Eurocode 5) \u2014 Timber Structures (EU)", 'cyan', 'cyan')
+    else:
+        ui_bullet("Select the governing material standard for your jurisdiction.", 'cyan', 'cyan')
+    ui_blank('cyan')
+    ui_head("Loads & combinations", 'cyan', 'cyan')
+    ui_bullet("ASCE/SEI 7 (US)  or  EN 1990/1991 (Eurocode basis & actions).", 'cyan', 'cyan')
+    ui_blank('cyan')
+    ui_head("Serviceability deflection limits", 'cyan', 'cyan')
+    ui_bullet("L/240 \u2014 roof members, no ceiling", 'cyan', 'cyan')
+    ui_bullet("L/360 \u2014 floors / general structural members", 'cyan', 'cyan')
+    ui_bullet("L/480 \u2014 members supporting brittle finishes", 'cyan', 'cyan')
+    ui_blank('cyan')
+    ui_close('cyan')
+
+    # ================================================================== #
+    #  Disclaimer
+    # ================================================================== #
+    print("\n")
+    ui_open("NOTICE", 'yellow')
+    ui_blank('yellow')
+    ui_text("Preliminary 1D linear-elastic results for guidance only. Final design", 'white', 'yellow')
+    ui_text("must be verified by a licensed engineer against the governing code and", 'white', 'yellow')
+    ui_text("project-specific load combinations, connections and detailing.", 'white', 'yellow')
+    ui_blank('yellow')
+    ui_close('yellow')
+
+    ui_footer("Press Enter to return to the main menu...")
 # =============================
 #  UNIT SYSTEM SELECTION 
 # ============================
