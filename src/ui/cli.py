@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 CLI for Zylo-X Beam Calculator
 ===================================
@@ -44,6 +43,7 @@ try:
         PyVista_bending_stress,
         PyVista_deflection,
         PyVista_combined,
+        PyVista_animation,
     )
     _PYVISTA_AVAILABLE = True
 except ImportError as _pv_err:
@@ -1777,7 +1777,7 @@ def run_extended_menu():
                     while True:
                         pv_choice = pyvista_menu()
 
-                        if pv_choice == '8':  # Back to postprocessing menu
+                        if pv_choice == '9':  # Back to postprocessing menu
                             break
 
                         # Guard: analysis must be done
@@ -1859,6 +1859,49 @@ def run_extended_menu():
                                     BendingStress=bs_data,
                                     Reactions=reac_data,
                                     units=current_labels
+                                )
+
+                            elif pv_choice == '8':  # Load Animation
+                                if not project_state.get("deflection_calculated", False):
+                                    print_error("Please run the analysis first (deflection is auto-calculated)!")
+                                    time.sleep(2)
+                                    continue
+
+                                print(colored("\nSelect scalar to animate:", 'cyan', attrs=['bold']))
+                                print(colored("  1 - Shear Force        4 - Bending Stress", 'yellow'))
+                                print(colored("  2 - Bending Moment     5 - Deflection only", 'yellow'))
+                                print(colored("  3 - Shear Stress       (4 & 3 require stress calc)", 'yellow'))
+                                anim_choice = input(colored("Choice [1-5] ➔ ", 'cyan', attrs=['bold'])).strip()
+
+                                result_map = {
+                                    '1': "ShearForce", '2': "BendingMoment", '3': "ShearStress",
+                                    '4': "BendingStress", '5': "Deflection",
+                                }
+                                result_key = result_map.get(anim_choice, "ShearForce")
+
+                                if result_key in ("ShearStress", "BendingStress") and \
+                                        not project_state.get("stress_calculated", False):
+                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    time.sleep(2)
+                                    continue
+
+                                n_frames_input = input(colored("Number of frames [10-120, default 60] ➔ ", 'cyan')).strip()
+                                n_frames = int(n_frames_input) if n_frames_input.isdigit() else 60
+                                n_frames = max(10, min(n_frames, 120))
+
+                                ss_anim = Shear_stress   if project_state.get("stress_calculated", False) else None
+                                bs_anim = bending_stress if project_state.get("stress_calculated", False) else None
+
+                                print_success(f"Opening animation: {result_key} ({n_frames} frames)...")
+                                PyVista_animation(
+                                    X_Field, Deflection,
+                                    Total_ShearForce, Total_BendingMoment,
+                                    ss_anim, bs_anim,
+                                    beam_length, shape, section_dims, c, b,
+                                    result_to_animate=result_key,
+                                    n_frames=n_frames,
+                                    fps=24,
+                                    units=current_labels,
                                 )
 
                             else:
