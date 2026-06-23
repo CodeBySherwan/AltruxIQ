@@ -34,6 +34,11 @@ except Exception:                       # pragma: no cover  (flat import for pre
 T.register_plotly_theme()
 T.apply_matplotlib_theme()
 
+try:
+    from plotting.export_helper import present_plotly
+except Exception:                       # pragma: no cover (flat import for previews)
+    from export_helper import present_plotly
+
 
 # --------------------------------------------------------------------------
 #  TYPOGRAPHY / NUMBER HELPERS  (kept for backward compatibility)
@@ -79,7 +84,7 @@ def find_critical_points(X, Y):
 # ==========================================================================
 #  SHARED PLOTLY SINGLE-DIAGRAM RENDERER
 # ==========================================================================
-def _render_single(x, y, key, title, value_unit, length_unit, ytitle, sig=2):
+def _render_single(x, y, key, title, value_unit, length_unit, ytitle, sig=2, name=None):
     x = np.asarray(x, float)
     y = np.asarray(y, float)
     accent = T.SERIES[key]["line"]
@@ -116,7 +121,7 @@ def _render_single(x, y, key, title, value_unit, length_unit, ytitle, sig=2):
     fig.update_yaxes(range=[vmin - 0.14 * span, vmax + 0.14 * span])
     fig.update_xaxes(range=[x0 - 0.02 * (x1 - x0), x1 + 0.02 * (x1 - x0)])
     T.add_plotly_watermark(fig)
-    fig.show(config=T.PLOTLY_CONFIG)
+    present_plotly(fig, name or title)
 
 
 # ==========================================================================
@@ -220,7 +225,7 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
         margin=dict(l=85, r=45, t=110, b=70),
     )
     T.add_plotly_watermark(fig)
-    fig.show(config=T.PLOTLY_CONFIG)
+    present_plotly(fig, f"Internal_Force_Diagrams_{plot_type}")
 
 
 def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
@@ -261,7 +266,7 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
         margin=dict(l=85, r=45, t=110, b=70),
     )
     T.add_plotly_watermark(fig)
-    fig.show(config=T.PLOTLY_CONFIG)
+    present_plotly(fig, "Beam_Analysis_Results")
 
 
 # ==========================================================================

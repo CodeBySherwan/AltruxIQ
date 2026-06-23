@@ -16,6 +16,10 @@ from plotting.plotting_helper import (
     draw_triangle_load, draw_reaction, draw_horizontal_reaction,
 )
 from plotting import plot_theme as T
+try:
+    from plotting.export_helper import present_plotly
+except Exception:                       # pragma: no cover
+    from export_helper import present_plotly
 
 
 def _add(traces, item):
@@ -107,7 +111,7 @@ def plot_beam_schematic(beam_type, beam_length, A, B, continuous_supports, loads
     fig.update_xaxes(range=[-0.6, scaled_length + 0.6])
     fig.update_yaxes(range=[-1.7, 1.7])
     T.add_plotly_watermark(fig)
-    fig.show(config=T.PLOTLY_CONFIG)
+    present_plotly(fig, "Beam_Schematic")
 
 
 def plot_reaction_diagram(reactions, units=None):
@@ -157,4 +161,4 @@ def plot_reaction_diagram(reactions, units=None):
     fig.update_xaxes(range=[-0.8, scaled_length + 0.8])
     fig.update_yaxes(range=[-1.9, 1.9])
     T.add_plotly_watermark(fig)
-    fig.show(config=T.PLOTLY_CONFIG)
+    present_plotly(fig, "Reaction_Diagram")
