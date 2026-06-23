@@ -220,7 +220,7 @@ def Beam_Classification():
     }
     if classification in mapping:
         return mapping[classification]
-    print_error("Invalid selection! Please choose a number between 1 and 7.")
+    print_error("Invalid selection. Please choose a number between 1 and 7.")
     time.sleep(1.5)
     return Beam_Classification()
 
@@ -399,7 +399,7 @@ def define_custom_supports(beam_length, unit_system="Metric", units=None):
                 
             # Validations
             if not has_y_restraint:
-                print_error("Beam has no vertical restraint! It will fail to solve. Please re-enter.")
+                print_error("Beam has no vertical restraint. It will fail to solve. Please re-enter.")
                 time.sleep(2.5)
                 continue
             if not has_x_restraint:
@@ -538,7 +538,7 @@ def manage_loads(unit_system="Metric", units=None):
                     print_success(f"Added angled point load: {force_mag/f_mult} {units['force']} at {angle}° at x = {pos/l_mult} {units['length']}")
                 
                 else:
-                    print_error("Invalid point load type selection!")
+                    print_error("Invalid point load type selection.")
                     time.sleep(2)
                 
                 time.sleep(1.5)
@@ -582,7 +582,7 @@ def manage_loads(unit_system="Metric", units=None):
                 
                 # Validation
                 if start >= end:
-                    print_error("End position must be greater than start position!")
+                    print_error("End position must be greater than start position.")
                     time.sleep(2)
                     continue
                 
@@ -669,7 +669,7 @@ def manage_loads(unit_system="Metric", units=None):
                 
                 # Validation
                 if start >= end:
-                    print_error("End position must be greater than start position!")
+                    print_error("End position must be greater than start position.")
                     time.sleep(2)
                     continue
                 
@@ -784,7 +784,7 @@ def manage_loads(unit_system="Metric", units=None):
             break
         
         else:
-            print_error("Invalid selection! Please try again.")
+            print_error("Invalid selection. Please try again.")
             time.sleep(2)
     
     return loads

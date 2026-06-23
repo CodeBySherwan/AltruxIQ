@@ -630,7 +630,7 @@ def display_section_library(sections, title="SECTION LIBRARY", is_custom=False):
             return choice_idx - 1
     except ValueError:
         pass
-    print_error("Invalid selection!")
+    print_error("Invalid selection.")
     time.sleep(1)
     return None
 

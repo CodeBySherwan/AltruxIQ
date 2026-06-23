@@ -1,9 +1,10 @@
 """
-CLI for Zylo-X Beam Calculator
+CLI for AltruxIQ — Structural FEA Suite
 ===================================
-This script provides a command-line interface (CLI) for the Zylo-X Beam Calculator.
-It handles project management, profile and material selection, boundary conditions,
-load definitions, analysis, postprocessing, and project save/load functionalities.
+This script provides the command-line interface (CLI) for AltruxIQ, the structural
+beam analysis & design-check suite. It handles project management, profile and
+material selection, boundary conditions, load definitions, analysis, post-processing,
+and project save/load functionality.
 """
 # modules
 
@@ -232,7 +233,7 @@ def load_project():
         proj_choice = int(input(colored(f"Enter the number of the project you want to load [1-{len(beam_storage)}] ➔ ", 'cyan', attrs=['bold'])))
         
         if proj_choice < 1 or proj_choice > len(beam_storage):
-            print_error(f"Invalid selection! Please choose a number between 1 and {len(beam_storage)}.")
+            print_error(f"Invalid selection. Please choose a number between 1 and {len(beam_storage)}.")
             time.sleep(2)
             return
             
@@ -341,7 +342,7 @@ def load_project():
         print_loaded_project_summary()
 
     except (IndexError, ValueError):
-        print_error("Invalid choice! Starting a new project instead.")
+        print_error("Invalid choice. Starting a new project instead.")
         current_project = None
         time.sleep(1)
 
@@ -391,7 +392,7 @@ def modify_loaded_project_data():
     global project_state
     
     if not project_state["is_loaded"]:
-        print_error("No project is currently loaded!")
+        print_error("No project is currently loaded.")
         time.sleep(1)
         return
         
@@ -440,7 +441,7 @@ def modify_loaded_project_data():
             return
             
         else:
-            print_error("Invalid selection! Please try again.")
+            print_error("Invalid selection. Please try again.")
             time.sleep(1)
 
 # =============================
@@ -453,7 +454,7 @@ def delete_project():
     load_projects_from_disk()
     
     if not beam_storage:
-        print_error("No saved projects available to delete!")
+        print_error("No saved projects available to delete.")
         input("Press Enter to return to the Project Management menu...")
         return
 
@@ -483,7 +484,7 @@ def delete_project():
         else:
             print("Deletion cancelled.")
     except ValueError:
-        print_error("Invalid input! Please enter a valid number.")
+        print_error("Invalid input. Please enter a valid number.")
 
     print("")
     input("Press Enter to return to the Project Management menu...")
@@ -500,7 +501,7 @@ def save_project():
     base_name = input(colored("Enter a name for this project ➔ ", 'cyan')).strip()
 
     if not base_name:
-        print_error("Project name cannot be empty!")
+        print_error("Project name cannot be empty.")
         return False
 
     # Auto-stamp the save with the current local date/time. The visible project
@@ -631,7 +632,7 @@ def select_material(unit_system="Metric", units=None):
     global Materials, project_state
     if units is None: units = METRIC_LABELS
     if Materials is None:
-        print_error("Materials database is not loaded!")
+        print_error("Materials database is not loaded.")
         return None
 
     materials_list = Materials.all_materials 
@@ -715,7 +716,7 @@ def select_material(unit_system="Metric", units=None):
     try:
         idx = int(selection) - 1
         if idx < 0 or idx >= len(materials_list):
-            print_error("Invalid selection!")
+            print_error("Invalid selection.")
             return None
         selected_material = materials_list[idx]
         print_success(f"You selected: {selected_material['Material']}")
@@ -917,7 +918,7 @@ def run_extended_menu():
                 elif sub_choice == '4':  # Delete project
                     delete_project()
                 else:
-                    print_error("Invalid selection! Please try again.")
+                    print_error("Invalid selection. Please try again.")
                     time.sleep(1)
 
         elif selection == '2':  # Define Beam Type
@@ -995,7 +996,7 @@ def run_extended_menu():
                             
                             if beam_type is None:
                                 cprint("----------------------------------------------", "white")
-                                print_error("Note: Please define beam type !!!!")
+                                print_error("Please define a beam type first.")
                                 cprint("----------------------------------------------", "white")
                                 print("")
                                 
@@ -1008,11 +1009,11 @@ def run_extended_menu():
                             elif profile_choice == '7': result = moi_solver.inertia_moment_rectangle(units=current_labels)
                             elif profile_choice == '8': result = moi_solver.inertia_moment_hollow_rectangle(units=current_labels)
                             else:
-                                print_error("Invalid choice! Please try again.")
+                                print_error("Invalid choice. Please try again.")
                                 continue
                                 
                             if result is None:
-                                print_error("Please try again!!!")
+                                print_error("Invalid input. Please try again.")
                                 time.sleep(2.5)
                                 continue
                                 
@@ -1123,7 +1124,7 @@ def run_extended_menu():
 
                 elif sub_choice == '3':  # View profile info
                     if not project_state["profile_saved"] and not shape:
-                        print_error("No profile defined yet!")
+                        print_error("No profile defined yet.")
                         time.sleep(2)
                         continue
                         
@@ -1222,7 +1223,7 @@ def run_extended_menu():
 
         elif selection == '5':  # Boundary Conditions
             if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
-                print_error(f"{beam_type} beams boundary conditions are automatically determined!")
+                print_error(f"{beam_type} beams boundary conditions are automatically determined.")
                 time.sleep(2)
            
            
@@ -1291,7 +1292,7 @@ def run_extended_menu():
                     
                     elif sub_choice == '2':  # View supports
                         if not project_state["supports_saved"] and not A_type and not B_type:
-                            print_error("No supports defined yet!")
+                            print_error("No supports defined yet.")
                             time.sleep(2)
                             continue
                         
@@ -1306,13 +1307,13 @@ def run_extended_menu():
                         print("")
                         input("Press Enter to return to the menu...")
             else:
-                print_error("Please define Beam Classification first !!!! ")
+                print_error("Please define a beam classification first.")
                 time.sleep(2)
                 continue
 
         elif selection == '6':  # Loads Definition
             if beam_type is None:
-                print_error("Beam Classificatione is not defined yet!")
+                print_error("Beam classification is not defined yet.")
                 time.sleep(2)
                 continue
             else:
@@ -1344,7 +1345,7 @@ def run_extended_menu():
                     
                     elif sub_choice == '2':  # View loads
                         if not project_state["loads_saved"] and not loads:
-                            print_error("No loads defined yet!")
+                            print_error("No loads defined yet.")
                             time.sleep(2)
                             continue
                         
@@ -1363,11 +1364,11 @@ def run_extended_menu():
                     
                     elif sub_choice == '3':  # Plot beam schematic
                         if not project_state["loads_saved"]:
-                            print_error("Please Check your Entered Loads!")
+                            print_error("Please review your entered loads.")
                             time.sleep(2)
                             continue
                         elif not project_state["supports_saved"]:
-                            print_error("Please Check your Entered Supports!")
+                            print_error("Please review your entered supports.")
                             time.sleep(2)
                             continue
 
@@ -1384,11 +1385,11 @@ def run_extended_menu():
                     
         elif selection == '7':  # Show Beam Schematic (Standalone)
                 if not project_state["loads_saved"]:
-                    print_error("Please Check your Entered Loads!")
+                    print_error("Please review your entered loads.")
                     time.sleep(2)
                     continue
                 elif not project_state["supports_saved"]:
-                    print_error("Please Check your Entered Supports!")
+                    print_error("Please review your entered supports.")
                     time.sleep(2)
                     continue
                 
@@ -1412,7 +1413,7 @@ def run_extended_menu():
                 # Check if all required data is available for analysis
                 if not project_state["profile_saved"] or not project_state["material_saved"] or \
                    not project_state["loads_saved"] or not project_state["supports_saved"]:
-                    print_error("Analysis requires profile, material, supports and loads to be defined!")
+                    print_error("Analysis requires profile, material, supports and loads to be defined.")
                     time.sleep(2)
                     continue
                 
@@ -1421,7 +1422,7 @@ def run_extended_menu():
                         # Check if all required data is available
                         if not project_state["profile_saved"] or not project_state["material_saved"] or \
                            not project_state["loads_saved"] or not project_state["supports_saved"]:
-                            print_error("Analysis requires profile, material, supports and loads to be defined!")
+                            print_error("Analysis requires profile, material, supports and loads to be defined.")
                             time.sleep(2)
                             continue
         
@@ -1527,7 +1528,7 @@ def run_extended_menu():
 
                 elif sub_choice == '2':  # View analysis results
                     if not project_state.get("analysis_complete", False):
-                        print_error("No analysis results available yet! Please run analysis first.")
+                        print_error("No analysis results available yet. Please run analysis first.")
                         time.sleep(2)
                         continue
         
@@ -1567,7 +1568,7 @@ def run_extended_menu():
                         continue
                 elif sub_choice == '3':  # Calculate deflection
                     if not project_state.get("analysis_complete", False):
-                        print_error("Please run the analysis first!")
+                        print_error("Please run the analysis first.")
                         time.sleep(2)
                         continue
         
@@ -1613,7 +1614,7 @@ def run_extended_menu():
                         continue
                 elif sub_choice == '4':  # Calculate stress and FOS
                     if not project_state.get("analysis_complete", False):
-                        print_error("Please run the analysis first!")
+                        print_error("Please run the analysis first.")
                         time.sleep(2)
                         continue
         
@@ -1688,13 +1689,13 @@ def run_extended_menu():
                     
                 # Check if analysis has been completed before allowing visualization
                 if not project_state.get("analysis_complete", False):
-                    print_error("Please complete an analysis before attempting visualization!")
+                    print_error("Please complete an analysis before attempting visualization.")
                     time.sleep(2)
                     continue
                     
                 if sub_choice == '1':  # Reaction forces schematic
                     try:
-                        print_success("Processing Reactions Forces Schematic Plots (Plotly-only):")
+                        print_success("Processing reaction-forces schematic (Plotly)…")
                         plot_reaction_diagram(Reactions, units=current_labels)
                     except Exception as e:
                         print_error(f"Error plotting reaction diagram: {e}")
@@ -1708,11 +1709,11 @@ def run_extended_menu():
                             print_success("Processing Shear Force Plot (Matplotlib):")
                             Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'SFD',units=current_labels)
                         elif style == '2':
-                                print_success("Processing Shear Force Plot Plot(Plotly):")
+                                print_success("Processing shear force plot (Plotly)…")
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'SFD',units=current_labels)
                         
                     except Exception as e:
-                        print_error(f"Error in Plotting !!! : {e}")
+                        print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
 
@@ -1723,11 +1724,11 @@ def run_extended_menu():
                             print_success("Processing Bending Moment Plot (Matplotlib):")
                             Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment,'BMD',units=current_labels)
                         elif style == '2':
-                                print_success("Processing Bending Moment Plot Plot(Plotly):")
+                                print_success("Processing bending moment plot (Plotly)…")
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'BMD',units=current_labels)
  
                     except Exception as e:
-                        print_error(f"Error in Plotting !!! : {e}")
+                        print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
 
@@ -1742,14 +1743,14 @@ def run_extended_menu():
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'Both',units=current_labels)
 
                     except Exception as e:
-                        print_error(f"Error in Plotting !!! : {e}")
+                        print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
 
                 elif sub_choice == '5':  # Shear Stress
                   
                     if not project_state.get("stress_calculated", False):
-                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
+                        print_error("Please calculate stresses first (Analysis menu → option 4).")
                         time.sleep(2)
                         continue
                     try:
@@ -1763,7 +1764,7 @@ def run_extended_menu():
                             Plotly_ShearStress(X_Field, Shear_stress, beam_length,units=current_labels)
                             
                         else:
-                            print_error("Invalid style selection!")
+                            print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
                     except Exception as e:
@@ -1771,7 +1772,7 @@ def run_extended_menu():
                         time.sleep(2)
                 elif sub_choice == '6':  # Bending Stress
                     if not project_state.get("stress_calculated", False):
-                        print_error("Please calculate stresses first (Analysis menu → option 4)!")
+                        print_error("Please calculate stresses first (Analysis menu → option 4).")
                         time.sleep(2)
                         continue
                     try:
@@ -1783,7 +1784,7 @@ def run_extended_menu():
                             print_success("Processing Bending Stress Plots (Plotly):")
                             Plotly_BendingStress(X_Field, bending_stress, beam_length, units=current_labels)
                         else:
-                            print_error("Invalid style selection!")
+                            print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
                     except Exception as e:
@@ -1791,7 +1792,7 @@ def run_extended_menu():
                         time.sleep(2)
                 elif sub_choice == '7':  # Deflection
                     if not project_state.get("deflection_calculated", False):
-                        print_error("Please calculate deflection first (in Analysis menu)!")
+                        print_error("Please calculate deflection first (in Analysis menu).")
                         time.sleep(2)
                         continue
                     try:
@@ -1803,7 +1804,7 @@ def run_extended_menu():
                             print_success("Processing Deflection/Displacement Plots (Plotly):")
                             Plotly_Deflection(X_Field, Deflection, beam_length, units=current_labels)
                         else:
-                            print_error("Invalid style selection!")
+                            print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
                     except Exception as e:
@@ -1827,7 +1828,7 @@ def run_extended_menu():
                         Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data,units=current_labels)
 
                     except Exception as e:
-                        print_error(f"Error in Plotting !!! : {e}")
+                        print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
 
@@ -1846,7 +1847,7 @@ def run_extended_menu():
 
                         # Guard: analysis must be done
                         if not project_state.get("analysis_complete", False):
-                            print_error("Please complete an analysis first!")
+                            print_error("Please complete an analysis first.")
                             time.sleep(2)
                             continue
 
@@ -1878,7 +1879,7 @@ def run_extended_menu():
 
                             elif pv_choice == '4':  # Shear Stress
                                 if not project_state.get("stress_calculated", False):
-                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    print_error("Please calculate stresses first (Analysis → option 4).")
                                     time.sleep(2)
                                     continue
                                 print_success("Opening 3D Shear Stress Contour (PyVista) ...")
@@ -1889,7 +1890,7 @@ def run_extended_menu():
 
                             elif pv_choice == '5':  # Bending Stress
                                 if not project_state.get("stress_calculated", False):
-                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    print_error("Please calculate stresses first (Analysis → option 4).")
                                     time.sleep(2)
                                     continue
                                 print_success("Opening 3D Bending Stress Contour (PyVista) ...")
@@ -1900,7 +1901,7 @@ def run_extended_menu():
 
                             elif pv_choice == '6':  # Deflection
                                 if not project_state.get("deflection_calculated", False):
-                                    print_error("Please run the analysis first (deflection is auto-calculated)!")
+                                    print_error("Please run the analysis first (deflection is auto-calculated).")
                                     time.sleep(2)
                                     continue
                                 print_success("Opening 3D Deflection Contour (PyVista) ...")
@@ -1927,7 +1928,7 @@ def run_extended_menu():
 
                             elif pv_choice == '8':  # Load Animation
                                 if not project_state.get("deflection_calculated", False):
-                                    print_error("Please run the analysis first (deflection is auto-calculated)!")
+                                    print_error("Please run the analysis first (deflection is auto-calculated).")
                                     time.sleep(2)
                                     continue
 
@@ -1945,7 +1946,7 @@ def run_extended_menu():
 
                                 if result_key in ("ShearStress", "BendingStress") and \
                                         not project_state.get("stress_calculated", False):
-                                    print_error("Please calculate stresses first (Analysis → option 4)!")
+                                    print_error("Please calculate stresses first (Analysis → option 4).")
                                     time.sleep(2)
                                     continue
 
@@ -1969,7 +1970,7 @@ def run_extended_menu():
                                 )
 
                             else:
-                                print_error("Invalid selection!")
+                                print_error("Invalid selection.")
                                 time.sleep(1)
 
                         except Exception as e:
@@ -1983,7 +1984,7 @@ def run_extended_menu():
         elif selection == '10':  # Save Project
             if not project_state["profile_saved"] or not project_state["material_saved"] or \
                not project_state["supports_saved"] or not project_state["loads_saved"]:
-                print_error("You must define profile, material, supports and loads before saving!")
+                print_error("You must define profile, material, supports and loads before saving.")
                 time.sleep(2)
                 continue
                 
@@ -1996,7 +1997,7 @@ def run_extended_menu():
                         save_projects_to_disk()
                         print_success("Project saved to disk successfully!")
                     else:
-                        print_error("Failed to save project!")
+                        print_error("Failed to save project.")
                 else:
                     print(colored("Project not saved. Continuing...", 'yellow'))
                     print("")
@@ -2011,13 +2012,13 @@ def run_extended_menu():
             if project_state["has_unsaved_changes"]:
                 check_unsaved_changes()
             
-            print_success("Thank you for using the Zylo-X Beam Calculator!")
+            print_success("Thank you for using AltruxIQ.")
             break
 
         elif selection == '11':  # Recommendations
             # Check if all necessary analyses have been done
             if not project_state.get("analysis_complete", False):
-                print_error("Please run the basic analysis first before getting recommendations!")
+                print_error("Please run the basic analysis first before getting recommendations.")
                 time.sleep(2)
                 continue
     
@@ -2079,7 +2080,7 @@ def run_extended_menu():
                 elif choice == '3':
                     break
                 else:
-                    print_error("Invalid selection!")
+                    print_error("Invalid selection.")
                     time.sleep(1)
         elif selection == '13':  # Solver Resolution
             while True:
@@ -2114,12 +2115,12 @@ def run_extended_menu():
                 elif res_choice == '6':
                     break
                 else:
-                    print_error("Invalid selection!")
+                    print_error("Invalid selection.")
                     time.sleep(1)
  
     
         else:
-            print_error("Invalid selection! Please try again.")
+            print_error("Invalid selection. Please try again.")
             time.sleep(1)
 
 
