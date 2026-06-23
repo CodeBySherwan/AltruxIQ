@@ -8,30 +8,28 @@ behaviour) and then offers the user a polished, optional export step:
 
     * Interactive HTML  -> self-contained .html (opens in any browser, retains
       hover / zoom / pan), Plotly.js pulled from CDN to keep files small.
-    * PNG image         -> high-resolution raster (scale x3) via Kaleido.
-    * Both              -> writes both files in one go.
+    * PNG image         -> uses Plotly's OWN built-in image export (the camera
+      button) in the browser. No Kaleido / Orca / Chrome dependency.
+    * Both              -> writes the HTML and triggers the PNG download.
 
-All exports are written to  <project-root>/exports/diagrams/  with a unique
-timestamped, filesystem-safe filename so nothing is ever overwritten. The
-export prompt is fully skippable and degrades gracefully on non-interactive
-terminals or when the optional ``kaleido`` PNG backend is not installed.
+Why the browser for PNG?
+------------------------
+Plotly.js renders a PNG client-side via ``Plotly.downloadImage`` - exactly what
+the modebar camera icon does. That path is dependency-free and never blocks the
+CLI, unlike the server-side ``fig.write_image`` (Kaleido) route, which can hang
+on a version mismatch. We write a tiny self-contained HTML that opens the figure
+and immediately fires the built-in PNG download into the browser's Downloads
+folder, then open it with the default browser.
 
-PNG export robustness
----------------------
-``fig.write_image`` (Kaleido) can *block indefinitely* on some setups - e.g. a
-Plotly/Kaleido version mismatch, or Kaleido trying to launch Chrome and never
-returning. Because that call holds the main thread, a hang would freeze the
-whole CLI (the menu would stop accepting input). To prevent that, PNG rendering
-runs on a worker thread guarded by a hard timeout: if Kaleido does not finish in
-time, we report the problem and hand control straight back to the menu instead
-of hanging.
+Interactive HTML files are saved to  <project-root>/exports/diagrams/  with a
+unique timestamped, filesystem-safe filename so nothing is ever overwritten.
 """
 
 import os
 import re
 import sys
 import datetime
-import threading
+import webbrowser
 
 # --- PATH INJECTION (so this module works from flat or package imports) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +37,8 @@ src_dir = os.path.dirname(current_dir)
 project_root = os.path.dirname(src_dir)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
+
+import plotly.io as pio
 
 from ui.Menus import print_success, print_error
 from ui.inputs import ask_yes_no, ask_choice
@@ -51,7 +51,8 @@ except Exception:                       # pragma: no cover (flat import for prev
 
 
 EXPORT_SUBDIR = os.path.join("exports", "diagrams")
-PNG_TIMEOUT_SECONDS = 60        # hard cap so a stuck Kaleido never freezes the CLI
+# Built-in PNG export resolution (matches the modebar camera button settings).
+_PNG_W, _PNG_H, _PNG_SCALE = 1100, 650, 3
 
 
 def _export_dir():
@@ -72,83 +73,60 @@ def _timestamp():
     return datetime.datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
 
 
-def _kaleido_available():
-    """True if the Kaleido PNG backend can be imported."""
-    try:
-        import kaleido  # noqa: F401
-        return True
-    except Exception:
-        return False
+def _write_interactive_html(fig, path):
+    """Write a self-contained interactive HTML diagram."""
+    fig.write_html(path, include_plotlyjs="cdn", config=T.PLOTLY_CONFIG)
 
 
-def _write_png(fig, path):
-    """Render a PNG on a worker thread, bounded by ``PNG_TIMEOUT_SECONDS``.
+def _export_png_via_browser(fig, base, stamp):
+    """Trigger Plotly's built-in PNG export (the camera button) in the browser.
 
-    Returns (ok: bool, reason: str|None). ``reason`` is "timeout" when Kaleido
-    did not finish in time, otherwise an error message; None on success.
+    Writes a tiny HTML that renders the figure and immediately calls
+    ``Plotly.downloadImage`` - the exact engine behind the modebar camera icon -
+    then opens it in the default browser. No Kaleido / Chrome dependency, and it
+    never blocks the CLI. The PNG lands in the browser's Downloads folder.
     """
-    box = {}
+    # post_script runs after the plot is created; grab the graph div and ask
+    # Plotly.js itself to render + download a PNG. A short delay lets layout settle.
+    post_script = (
+        "var __gd = document.querySelector('.plotly-graph-div');"
+        "setTimeout(function(){"
+        "  Plotly.downloadImage(__gd, {format:'png', scale:%d, width:%d, height:%d,"
+        "    filename:'%s'});"
+        "}, 800);"
+    ) % (_PNG_SCALE, _PNG_W, _PNG_H, f"{base}_{stamp}")
 
-    def _work():
-        try:
-            fig.write_image(path, scale=3, width=1100, height=650)
-            box["ok"] = True
-        except Exception as exc:                       # pragma: no cover
-            box["err"] = exc
+    html = pio.to_html(fig, include_plotlyjs="cdn", config=T.PLOTLY_CONFIG,
+                       full_html=True, post_script=post_script)
+    helper = os.path.join(_export_dir(), f"{base}_{stamp}_png.html")
+    with open(helper, "w", encoding="utf-8") as f:
+        f.write(html)
 
-    worker = threading.Thread(target=_work, daemon=True)
-    worker.start()
-    worker.join(PNG_TIMEOUT_SECONDS)
-
-    if worker.is_alive():
-        return False, "timeout"
-    if box.get("ok"):
-        return True, None
-    return False, str(box.get("err", "unknown error"))
-
-
-def _export_png(fig, png_path):
-    """Attempt a PNG export with friendly, non-blocking failure handling."""
-    if not _kaleido_available():
-        print_error("PNG export needs the 'kaleido' package (it is not installed).")
-        print_error("Install it with:  pip install kaleido==0.2.1")
-        print_error("Meanwhile, choose 'Interactive HTML', or use the camera icon")
-        print_error("in the diagram window to save a PNG directly.")
-        return None
-
-    print(colored("  Rendering PNG (this can take a few seconds)\u2026", 'cyan'))
-    ok, reason = _write_png(fig, png_path)
-    if ok:
-        print_success(f"PNG image saved: {png_path}")
-        return png_path
-
-    if reason == "timeout":
-        print_error(f"PNG export timed out after {PNG_TIMEOUT_SECONDS}s - the Kaleido")
-        print_error("image engine is not responding (often a Plotly/Kaleido version")
-        print_error("mismatch). Returning you to the menu.")
-        print_error("Fix:  pip install -U plotly kaleido    (or pin kaleido==0.2.1)")
-        print_error("Tip:  'Interactive HTML' always works, or use the camera icon")
-        print_error("      in the diagram window to save a PNG.")
+    opened = webbrowser.open("file://" + os.path.abspath(helper))
+    if opened:
+        print_success("Opening your browser to save the PNG (Plotly built-in export)\u2026")
+        print_success("The image will appear in your browser's Downloads folder as")
+        print_success(f"  {base}_{stamp}.png")
+        print(colored("  Tip: you can also click the \U0001f4f7 camera icon in any diagram "
+                      "window to save a PNG at any time.", 'cyan'))
     else:
-        print_error("PNG export failed in the Kaleido backend.")
-        print_error("Fix:  pip install -U plotly kaleido    (or pin kaleido==0.2.1)")
-        print_error(f"(details: {reason})")
-    return None
+        print_error("Could not open a browser automatically.")
+        print_error(f"Open this file manually to download the PNG:  {helper}")
+    return helper
 
 
 def export_plotly(fig, default_name="diagram"):
     """Offer to export ``fig`` as interactive HTML and/or a PNG image.
 
-    Returns a list of the file paths written (may be empty if the user skips).
-    Never raises on a cancelled/declined prompt, and never blocks the CLI on a
-    misbehaving PNG backend.
+    Returns a list of the file paths produced (may be empty if the user skips).
+    Never raises on a cancelled/declined prompt and never blocks the CLI.
     """
     saved = []
     try:
         if not ask_yes_no("Export this diagram to a file?", default=False):
             return saved
         print(colored("  1) Interactive HTML", 'yellow')
-              + colored("    2) PNG image", 'yellow')
+              + colored("    2) PNG image (Plotly built-in)", 'yellow')
               + colored("    3) Both", 'yellow'))
         choice = ask_choice("Choose export format", ["1", "2", "3"], allow_cancel=True)
     except (EOFError, KeyboardInterrupt):
@@ -158,22 +136,22 @@ def export_plotly(fig, default_name="diagram"):
 
     base = _safe_name(default_name)
     stamp = _timestamp()
-    out_dir = _export_dir()
 
     if choice in ("1", "3"):
-        html_path = os.path.join(out_dir, f"{base}_{stamp}.html")
+        html_path = os.path.join(_export_dir(), f"{base}_{stamp}.html")
         try:
-            fig.write_html(html_path, include_plotlyjs="cdn", config=T.PLOTLY_CONFIG)
+            _write_interactive_html(fig, html_path)
             saved.append(html_path)
             print_success(f"Interactive HTML saved: {html_path}")
         except Exception as e:
             print_error(f"Could not write HTML: {e}")
 
     if choice in ("2", "3"):
-        png_path = os.path.join(out_dir, f"{base}_{stamp}.png")
-        result = _export_png(fig, png_path)
-        if result:
-            saved.append(result)
+        try:
+            saved.append(_export_png_via_browser(fig, base, stamp))
+        except Exception as e:
+            print_error(f"PNG export failed: {e}")
+            print_error("You can still use the \U0001f4f7 camera icon in the diagram window.")
 
     return saved
 

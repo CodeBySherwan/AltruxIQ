@@ -19,8 +19,7 @@ Werkzeug
 APScheduler
 pandas
 nbformat>=4.2.0
-# UI / export dependencies
+# UI / export dependencies (PNG uses Plotly's built-in browser export — no kaleido)
 termcolor>=2.0
-kaleido==0.2.1
 imageio>=2.19
 pillow>=9.0
