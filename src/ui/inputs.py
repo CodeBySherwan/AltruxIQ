@@ -32,6 +32,147 @@ if src_dir not in sys.path:
 from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
                      ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head)
 
+# =============================================================================
+#  PROFESSIONAL INPUT TOOLKIT
+# -----------------------------------------------------------------------------
+#  Validated, retry-on-error prompt primitives sharing one visual language:
+#  a bold cyan label, an inline constraint/units hint, the standard caret, and
+#  friendly red error messages. Numeric prompts re-ask on invalid input instead
+#  of crashing; optional prompts accept a cancel keyword so the user can back
+#  out of any data-entry step cleanly.
+# =============================================================================
+PROMPT_CARET = "\u2794"
+_CANCEL_TOKENS = {"c", "cancel", "q", "quit", "b", "back", "esc"}
+
+
+def _dim(text):
+    return colored(text, 'white', attrs=['dark'])
+
+
+def _format_prompt(label, unit=None, hint=None, default=None, allow_cancel=False):
+    head = "  " + label.strip()
+    if unit:
+        head += f"  [{unit}]"
+    sub = []
+    if hint:
+        sub.append(hint)
+    if default is not None:
+        sub.append(f"default: {default}")
+    if allow_cancel:
+        sub.append("'c' to cancel")
+    line = colored(head, 'cyan', attrs=['bold'])
+    if sub:
+        line += _dim("   (" + "  \u00b7  ".join(sub) + ")")
+    line += colored(f"\n  {PROMPT_CARET} ", 'cyan', attrs=['bold'])
+    return line
+
+
+def _range_hint(minimum, maximum, exclusive_min, exclusive_max, symbol="x"):
+    if minimum is None and maximum is None:
+        return None
+    lo = ""
+    if minimum is not None:
+        lo = f"{minimum} {'<' if exclusive_min else '\u2264'} "
+    hi = ""
+    if maximum is not None:
+        hi = f" {'<' if exclusive_max else '\u2264'} {maximum}"
+    return f"{lo}{symbol}{hi}"
+
+
+def ask_float(label, unit=None, minimum=None, maximum=None,
+              exclusive_min=False, exclusive_max=False,
+              default=None, allow_cancel=False):
+    """Prompt for a float, validating range and retrying on bad input.
+    Returns the float, or None if the user cancels (when allowed)."""
+    hint = _range_hint(minimum, maximum, exclusive_min, exclusive_max)
+    while True:
+        raw = input(_format_prompt(label, unit, hint, default, allow_cancel)).strip()
+        if not raw and default is not None:
+            return float(default)
+        if allow_cancel and raw.lower() in _CANCEL_TOKENS:
+            return None
+        try:
+            val = float(raw)
+        except ValueError:
+            print_error("  Please enter a valid number (e.g. 12.5).")
+            time.sleep(1.0); continue
+        if minimum is not None and (val < minimum or (exclusive_min and val == minimum)):
+            rel = "greater than" if exclusive_min else "at least"
+            print_error(f"  Value must be {rel} {minimum}{(' ' + unit) if unit else ''}.")
+            time.sleep(1.0); continue
+        if maximum is not None and (val > maximum or (exclusive_max and val == maximum)):
+            rel = "less than" if exclusive_max else "at most"
+            print_error(f"  Value must be {rel} {maximum}{(' ' + unit) if unit else ''}.")
+            time.sleep(1.0); continue
+        return val
+
+
+def ask_int(label, minimum=None, maximum=None, default=None, allow_cancel=False):
+    """Prompt for an integer, validating range and retrying on bad input."""
+    hint = _range_hint(minimum, maximum, False, False, symbol="n")
+    while True:
+        raw = input(_format_prompt(label, None, hint, default, allow_cancel)).strip()
+        if not raw and default is not None:
+            return int(default)
+        if allow_cancel and raw.lower() in _CANCEL_TOKENS:
+            return None
+        try:
+            val = int(raw)
+        except ValueError:
+            print_error("  Please enter a whole number (e.g. 2001).")
+            time.sleep(1.0); continue
+        if minimum is not None and val < minimum:
+            print_error(f"  Value must be at least {minimum}."); time.sleep(1.0); continue
+        if maximum is not None and val > maximum:
+            print_error(f"  Value must be at most {maximum}."); time.sleep(1.0); continue
+        return val
+
+
+def ask_text(label, required=True, default=None, allow_cancel=False, max_len=None):
+    """Prompt for a line of text with optional required / length validation."""
+    while True:
+        raw = input(_format_prompt(label, None, None, default, allow_cancel)).strip()
+        if allow_cancel and raw.lower() in _CANCEL_TOKENS:
+            return None
+        if not raw:
+            if default is not None:
+                return default
+            if not required:
+                return ""
+            print_error("  This field cannot be empty."); time.sleep(1.0); continue
+        if max_len and len(raw) > max_len:
+            print_error(f"  Please keep it under {max_len} characters."); time.sleep(1.0); continue
+        return raw
+
+
+def ask_choice(label, valid, allow_cancel=False):
+    """Prompt until the user enters one of ``valid`` tokens. Returns the token."""
+    valid = [str(v) for v in valid]
+    hint = "options: " + " / ".join(valid)
+    while True:
+        raw = input(_format_prompt(label, None, hint, None, allow_cancel)).strip()
+        if allow_cancel and raw.lower() in _CANCEL_TOKENS:
+            return None
+        if raw in valid:
+            return raw
+        print_error(f"  Invalid choice. Pick one of: {', '.join(valid)}."); time.sleep(1.0)
+
+
+def ask_yes_no(question, default=None):
+    """Prompt for a yes/no answer. Returns True/False (default on empty input)."""
+    suffix = "(Y/N)" if default is None else ("(Y/n)" if default else "(y/N)")
+    while True:
+        raw = input(colored(f"  {question} {suffix} {PROMPT_CARET} ",
+                            'cyan', attrs=['bold'])).strip().lower()
+        if not raw and default is not None:
+            return default
+        if raw in ("y", "yes"):
+            return True
+        if raw in ("n", "no"):
+            return False
+        print_error("  Please answer Y or N."); time.sleep(0.8)
+
+
 #  Beam Classification Setup
 
 def Beam_Classification():
@@ -87,12 +228,8 @@ def Beam_Length(unit_system="Metric", units=None):
     """Prompt the user to enter the beam length."""
     if units is None: units = {'length': 'm'}
     multiplier = CONVERSION_TO_SI[unit_system]["length"]
-    
-    beam_length_raw = float(input(colored(f"Enter Beam Length ({units['length']}): ➔ ", 'cyan')))
-    if beam_length_raw <= 0:
-        print_error("Beam length must be positive.")
-        time.sleep(1)
-        return Beam_Length(unit_system, units)
+    beam_length_raw = ask_float("Enter beam length", unit=units['length'],
+                                minimum=0, exclusive_min=True)
     print("")
     return beam_length_raw * multiplier  # Return converted SI value
 
@@ -101,33 +238,23 @@ def Beam_Supports(unit_system="Metric", units=None):
     """Prompt the user to define the beam supports."""
     if units is None: units = {'length': 'm'}
     multiplier = CONVERSION_TO_SI[unit_system]["length"]
-    
-    try:
-        A_raw = float(input(colored(f"Enter Position of Pin Support A ({units['length']}): ➔ ", 'cyan')))
-        A = A_raw * multiplier
-        A_restraint = (1, 1, 0)
-        A_type = "Pin Support"
-    
-        B_raw = float(input(colored(f"Enter Position of Roller Support B ({units['length']}): ➔ ", 'cyan')))
-        B = B_raw * multiplier
-        B_restraint = (0, 1, 0)
-        B_type = "Roller Support"
-    
-        if A < 0 or B < 0:
-            print_error("Support positions must be positive.")
-            time.sleep(1)
-            print("")
-            return Beam_Supports(unit_system, units)
-        if A >= B:
-             print_error("Support A must be to the left of Support B.")
-             print("")
-             time.sleep(1)
-             return Beam_Supports(unit_system, units)  
+    A_raw = ask_float("Enter position of Pin Support A", unit=units['length'], minimum=0)
+    A = A_raw * multiplier
+    A_restraint = (1, 1, 0)
+    A_type = "Pin Support"
+
+    B_raw = ask_float("Enter position of Roller Support B", unit=units['length'], minimum=0)
+    B = B_raw * multiplier
+    B_restraint = (0, 1, 0)
+    B_type = "Roller Support"
+
+    if A >= B:
+        print_error("Support A must be to the left of Support B.")
         print("")
-        return A, B, A_restraint, B_restraint, A_type, B_type
-    except ValueError as ve:
-        print_error(f"Input error: {ve}")
-        return None, None, None, None, None, None
+        time.sleep(1.2)
+        return Beam_Supports(unit_system, units)
+    print("")
+    return A, B, A_restraint, B_restraint, A_type, B_type
 
 
 def define_continuous_supports(beam_length, unit_system="Metric", units=None):
@@ -667,15 +794,8 @@ def get_solver_resolution():
     """
     Prompt the user to enter a custom solver resolution between 201 and 10001.
     """
-    while True:
-        try:
-            pts = int(input(colored("Enter custom resolution (201 - 10001): ➔ ", 'cyan')))
-            if 201 <= pts <= 10001:
-                return pts
-            else:
-                print_error("Value must be between 201 and 10001.")
-        except ValueError:
-            print_error("Invalid input. Please enter an integer.")
+    return ask_int("Enter custom solver resolution", minimum=201, maximum=10001,
+                   default=2001, allow_cancel=True)
 #--------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------
 def define_custom_material(unit_system="Metric", units=None):
@@ -686,57 +806,52 @@ def define_custom_material(unit_system="Metric", units=None):
     print(colored("║               DEFINE CUSTOM MATERIAL                         ║", 'cyan', attrs=['bold']))
     print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     print("\n")
-    
-    try:
-        name = input(colored("Enter Material Name: ➔ ", 'cyan')).strip()
-        if not name:
-            print_error("Name cannot be empty.")
-            time.sleep(1.5)
-            return None
+    name = ask_text("Enter material name", required=True, allow_cancel=True, max_len=60)
+    if name is None:
+        return None
 
-        is_imperial = (unit_system == "Imperial")
-        
-        # Inputs in active units, converted to JSON base schema (kg/m³, MPa, GPa)
-        dens_val = float(input(colored(f"Enter Density ({units['density']}): ➔ ", 'cyan')))
-        json_dens = dens_val * 16.01846 if is_imperial else dens_val
-        
-        yield_val = float(input(colored(f"Enter Yield Strength ({units['stress']}): ➔ ", 'cyan')))
-        json_yield = yield_val * 6.894757 if is_imperial else yield_val
-        
-        ult_val = float(input(colored(f"Enter Ultimate Strength ({units['stress']}): ➔ ", 'cyan')))
-        json_ult = ult_val * 6.894757 if is_imperial else ult_val
-        
-        if json_yield >= json_ult:
-            print_error("Yield Strength must be less than Ultimate Strength.")
-            time.sleep(2)
-            return None
-            
-        mod_val = float(input(colored(f"Enter Elastic Modulus ({units['modulus']}): ➔ ", 'cyan')))
-        json_mod = mod_val * 0.006894757 if is_imperial else mod_val
-        
-        poisson = float(input(colored("Enter Poisson's Ratio (e.g., 0.3): ➔ ", 'cyan')))
-        if not (0.0 < poisson < 0.5):
-            print_error("Poisson's Ratio must be between 0 and 0.5.")
-            time.sleep(2)
-            return None
-            
-        therm = float(input(colored("Enter Thermal Expansion Coefficient (1/°C) [e.g., 1.2e-5, or 0 to skip]: ➔ ", 'cyan')))
-        desc = input(colored("Enter a short description: ➔ ", 'cyan')).strip()
-        
-        material_dict = {
-            "Material": name,
-            "Density": round(json_dens, 2),
-            "Yield Strength": round(json_yield, 2),
-            "Ultimate Strength": round(json_ult, 2),
-            "Elastic Modulus": round(json_mod, 2),
-            "Poisson Ratio": round(poisson, 3),
-            "Thermal Expansion": therm if therm != 0 else 0,
-            "Description": desc
-        }
-        
-        return material_dict
-        
-    except ValueError:
-        print_error("Invalid numeric input. Material creation aborted.")
+    is_imperial = (unit_system == "Imperial")
+
+    # Inputs in active units, converted to JSON base schema (kg/m³, MPa, GPa)
+    dens_val = ask_float("Enter density", unit=units['density'], minimum=0, exclusive_min=True, allow_cancel=True)
+    if dens_val is None: return None
+    json_dens = dens_val * 16.01846 if is_imperial else dens_val
+
+    yield_val = ask_float("Enter yield strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
+    if yield_val is None: return None
+    json_yield = yield_val * 6.894757 if is_imperial else yield_val
+
+    ult_val = ask_float("Enter ultimate strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
+    if ult_val is None: return None
+    json_ult = ult_val * 6.894757 if is_imperial else ult_val
+
+    if json_yield >= json_ult:
+        print_error("Yield Strength must be less than Ultimate Strength.")
         time.sleep(2)
         return None
+
+    mod_val = ask_float("Enter elastic modulus", unit=units['modulus'], minimum=0, exclusive_min=True, allow_cancel=True)
+    if mod_val is None: return None
+    json_mod = mod_val * 0.006894757 if is_imperial else mod_val
+
+    poisson = ask_float("Enter Poisson's ratio", minimum=0, maximum=0.5, exclusive_min=True, exclusive_max=True, default=0.3, allow_cancel=True)
+    if poisson is None: return None
+
+    therm = ask_float("Enter thermal expansion coefficient (1/°C, 0 to skip)", default=0, allow_cancel=True)
+    if therm is None: return None
+    desc = ask_text("Enter a short description", required=False, allow_cancel=True, max_len=120)
+    if desc is None:
+        desc = ""
+
+    material_dict = {
+        "Material": name,
+        "Density": round(json_dens, 2),
+        "Yield Strength": round(json_yield, 2),
+        "Ultimate Strength": round(json_ult, 2),
+        "Elastic Modulus": round(json_mod, 2),
+        "Poisson Ratio": round(poisson, 3),
+        "Thermal Expansion": therm if therm != 0 else 0,
+        "Description": desc
+    }
+
+    return material_dict
