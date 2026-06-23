@@ -30,7 +30,9 @@ src_dir     = os.path.dirname(current_dir)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-from ui.Menus import get_divisor
+from ui.Menus import get_divisor, print_success, print_error
+from ui.inputs import ask_choice, ask_yes_no
+from termcolor import colored
 
 # ---------------------------------------------------------------------------
 # VISUAL CONFIGURATION — centralised magic numbers
@@ -1452,7 +1454,78 @@ class AnimationPlotter(_PlotterBase):
         off.close()
 
         imageio.mimwrite(filepath, frames_rgb, fps=fps_out, loop=0)
-        print(f"\n  Saved: {filepath}")
+        print_success(f"Animated GIF saved: {filepath}")
+        return filepath
+
+    # --------------------------------------------------------------- PNG export
+    def export_png(self, filepath, frame_idx=-1, window_size=(1920, 1080)):
+        """Render a single high-resolution still of one animation frame.
+
+        ``frame_idx`` defaults to the last (100%-load) frame. Rendered fully
+        off-screen so it works regardless of the live viewer state.
+        """
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        n = len(self.mesh_frames)
+        idx = frame_idx if frame_idx >= 0 else n - 1
+        idx = max(0, min(idx, n - 1))
+        mesh_k = self.mesh_frames[idx]
+        clim = [self._scalar_min, self._scalar_max]
+        cmap = self._CMAP_BY_KIND.get(self.result_kind, _FEA_CMAP)
+
+        off = pv.Plotter(off_screen=True, window_size=window_size)
+        off.set_background(_BG_COLOR)
+        if self.ref_mesh is not None:
+            off.add_mesh(self.ref_mesh, color=_BEAM_COLOR, opacity=_GHOST_OPACITY,
+                         style=_GHOST_STYLE, show_edges=True, edge_color="#505050",
+                         line_width=1.0, reset_camera=False)
+        off.add_mesh(mesh_k, scalars=self.scalars_name, cmap=cmap, clim=clim,
+                     n_colors=_N_COLORS, show_edges=True, edge_color=_EDGE_COLOR,
+                     reset_camera=False)
+        _apply_visual_scaling(off, self.draw_length, self.section_dim_max)
+        alpha = idx / max(n - 1, 1)
+        off.add_text(f"{self.title}  \u2014  Load: {int(alpha * 100)}%",
+                     position="upper_edge", font_size=16, color="black")
+        off.view_xy(); off.reset_camera(); off.camera.zoom(1.2)
+        off.screenshot(filepath)
+        off.close()
+        print_success(f"PNG image saved: {filepath}")
+        return filepath
+
+
+def _animation_export_menu(ap, result_key):
+    """Optional post-viewer export step: animated GIF and/or high-res PNG.
+
+    Mirrors the 2D Plotly export workflow so the whole app shares one
+    save-to-file experience. Never raises on a declined/cancelled prompt.
+    """
+    try:
+        if not ask_yes_no("Export this 3D animation to a file?", default=False):
+            return []
+        print(colored("  1) Animated GIF", 'yellow')
+              + colored("    2) PNG image (still)", 'yellow')
+              + colored("    3) Both", 'yellow'))
+        choice = ask_choice("Choose export format", ["1", "2", "3"], allow_cancel=True)
+    except (EOFError, KeyboardInterrupt):
+        return []
+    if choice is None:
+        return []
+
+    stamp = _timestamp()
+    base = f"animation_{result_key}"
+    out_dir = _ensure_export_dir()
+    saved = []
+    if choice in ("1", "3"):
+        try:
+            saved.append(ap.export_gif(os.path.join(out_dir, f"{base}_{stamp}.gif")))
+        except Exception as e:
+            print_error(f"GIF export failed: {e}")
+            print_error("Install the backend with:  pip install imageio")
+    if choice in ("2", "3"):
+        try:
+            saved.append(ap.export_png(os.path.join(out_dir, f"{base}_{stamp}.png")))
+        except Exception as e:
+            print_error(f"PNG export failed: {e}")
+    return [s for s in saved if s]
 
 
 def PyVista_animation(
@@ -1511,3 +1584,7 @@ def PyVista_animation(
     # Route through AnimationPlotter.show() so the timer + GL context are torn
     # down on close (prevents shader corruption when re-opening).
     ap.show(screenshot=_make_screenshot_path(f"animation_{result_to_animate}"))
+
+    # After the interactive viewer closes, offer to save the animation to disk
+    # (animated GIF and/or a high-resolution still PNG).
+    _animation_export_menu(ap, result_to_animate)
