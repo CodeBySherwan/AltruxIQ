@@ -1,7 +1,92 @@
 import os
+import sys
 import time
+import threading
+import datetime
 from termcolor import colored, cprint
 import numpy as np
+
+# =============================================================================
+#  SESSION CLOCK / RUNTIME TELEMETRY
+# -----------------------------------------------------------------------------
+#  A single monotonic session start-stamp drives the SESSION STATUS panel:
+#  a live wall-clock, session uptime and (optionally) a real ticking clock
+#  rendered in place via ANSI cursor save/restore while the menu waits for
+#  input. Falls back gracefully on non-TTY / unsupported terminals.
+# =============================================================================
+SESSION_START = datetime.datetime.now().astimezone()
+
+
+def fmt_datetime(dt=None):
+    """Human-friendly local timestamp, e.g. 'Tue 23 Jun 2026  19:45:21'."""
+    dt = dt or datetime.datetime.now().astimezone()
+    return dt.strftime("%a %d %b %Y  %H:%M:%S")
+
+
+def fmt_date_compact(dt=None):
+    """Compact date-time used for project filenames/labels: '2026-06-23 19:45'."""
+    dt = dt or datetime.datetime.now().astimezone()
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def fmt_duration(seconds):
+    """Format an elapsed duration as 'HH:MM:SS' (or 'Dd HH:MM:SS')."""
+    seconds = int(max(0, seconds))
+    d, rem = divmod(seconds, 86400)
+    h, rem = divmod(rem, 3600)
+    m, s = divmod(rem, 60)
+    if d:
+        return f"{d}d {h:02d}:{m:02d}:{s:02d}"
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def session_uptime():
+    """Seconds elapsed since the application session started."""
+    return (datetime.datetime.now().astimezone() - SESSION_START).total_seconds()
+
+
+def _live_clock_supported():
+    """True only when stdout is an interactive TTY that can take ANSI codes."""
+    try:
+        return sys.stdout.isatty()
+    except Exception:
+        return False
+
+
+def input_with_live_clock(prompt_text, render_clock_line):
+    """Display a prompt while a one-line live clock ticks on the line directly
+    above it. The clock line is rewritten once per second using ANSI cursor
+    save/restore so the user's typing is never disturbed.
+
+    ``render_clock_line`` is a zero-arg callable returning the (already
+    coloured) clock string. Falls back to a static line on non-TTY terminals.
+    """
+    if not _live_clock_supported():
+        print(render_clock_line())
+        return input(prompt_text)
+
+    print(render_clock_line())          # initial paint, one line above prompt
+    stop = threading.Event()
+
+    def _worker():
+        while not stop.wait(1.0):
+            try:
+                sys.stdout.write("\0337")        # save cursor
+                sys.stdout.write("\033[1A")      # up one line (to clock line)
+                sys.stdout.write("\r\033[2K")    # col 0 + clear entire line
+                sys.stdout.write(render_clock_line())
+                sys.stdout.write("\0338")        # restore cursor
+                sys.stdout.flush()
+            except Exception:
+                return
+
+    ticker = threading.Thread(target=_worker, daemon=True)
+    ticker.start()
+    try:
+        return input(prompt_text)
+    finally:
+        stop.set()
+        ticker.join(timeout=1.2)
 
 # =============================================================================
 #  PROFESSIONAL CONSOLE UI TOOLKIT  (commercial-grade rendering primitives)
@@ -227,10 +312,18 @@ def print_success(msg):
 # Extended Main Menu and Runner
 # =============================
 # First, update the main_menu_template() function to add the new option
-def main_menu_template(current_points=2001):
+def main_menu_template(current_points=2001, session_info=None):
     """Display the main menu, organised by the standard FEA workflow:
     Pre-Processing -> Solution -> Post-Processing -> Configuration.
     Item numbers are preserved (0-13) so the controller dispatch is unchanged.
+
+    ``session_info`` (optional dict) feeds the live SESSION STATUS panel:
+        name          -> active project display name (with date), or None
+        saved_at      -> ISO / display timestamp of last save, or None
+        unit_system   -> 'Metric' | 'Imperial'
+        steps_done    -> int, completed pre-processing inputs (0-4)
+        steps_total   -> int, total pre-processing inputs (default 4)
+        analysed      -> bool, whether a solution exists
     """
     clear_screen()
     ui_banner("AltruxIQ  \u2022  STRUCTURAL FEA SUITE",
@@ -285,22 +378,62 @@ def main_menu_template(current_points=2001):
     ui_close('yellow')
 
     # ---- Status bar ------------------------------------------------------
+    info = session_info or {}
+    proj_name   = info.get("name")
+    saved_at    = info.get("saved_at")
+    unit_system = info.get("unit_system", "Metric")
+    steps_done  = int(info.get("steps_done", 0))
+    steps_total = int(info.get("steps_total", 4))
+    analysed    = bool(info.get("analysed", False))
+
     print("\n")
     ui_open("SESSION STATUS", 'green')
+
+    if proj_name:
+        ui_field("Active project", proj_name,
+                 frame_color='green', label_color='green', value_color='cyan')
+        ui_field("Last saved", saved_at or "unsaved \u2014 changes pending",
+                 frame_color='green', label_color='green',
+                 value_color=('white' if saved_at else 'yellow'))
+    else:
+        ui_field("Active project", "\u2014 none loaded (new session) \u2014",
+                 frame_color='green', label_color='green', value_color='yellow')
+
+    ui_field("Unit system", unit_system,
+             frame_color='green', label_color='green', value_color='white')
     ui_field("Solver discretisation", f"{current_points} integration points",
              frame_color='green', label_color='green', value_color='white')
-    ui_field("Workflow", "Follow stages 1 \u2192 2 \u2192 3 for a complete analysis",
-             frame_color='green', label_color='green', value_color='white')
+
+    # Pre-processing completeness bar + solution state
+    frac = (steps_done / steps_total) if steps_total else 0.0
+    bar, _col = ui_bar(frac, width=20)
+    print(colored("\u2502 ", 'green')
+          + colored("Pre-processing".ljust(30), 'green')
+          + bar + colored(f"  {steps_done}/{steps_total} inputs", 'white'))
+    sol_txt, sol_col = (("\u2713 solved", 'green') if analysed
+                        else ("\u2014 not yet solved", 'yellow'))
+    ui_field("Solution state", sol_txt,
+             frame_color='green', label_color='green', value_color=sol_col)
     ui_close('green')
 
+    def _render_clock_line():
+        now = datetime.datetime.now().astimezone()
+        return (colored("  \U0001f552 ", 'green')
+                + colored(fmt_datetime(now), 'white', attrs=['bold'])
+                + colored("   \u2502   \u23f1 uptime ", 'green')
+                + colored(fmt_duration(session_uptime()), 'white', attrs=['bold']))
+
     print("")
-    selection = input(colored("  Enter selection [0-13] \u2794 ", 'cyan', attrs=['bold']))
+    selection = input_with_live_clock(
+        colored("  Enter selection [0-13] \u2794 ", 'cyan', attrs=['bold']),
+        _render_clock_line,
+    )
     return selection
 
 # =============================
 # Project Management Functions
 # =============================
-def project_management_menu():
+def project_management_menu(session_info=None):
     """Display an enhanced project management submenu and return the user's choice."""
     clear_screen()
     
@@ -329,10 +462,24 @@ def project_management_menu():
     
     print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
     
-    # Add project status section (can be expanded to show current project info)
-    print("\n" + colored("┌─ PROJECT STATUS ", 'green') + colored("─"*44, 'green', attrs=['bold']))
-    print(colored("│ No active project loaded", 'green'))  # This could be dynamic based on project state
-    print(colored("└───" + "─"*53, 'green', attrs=['bold']))
+    # Dynamic project status section, driven by the live session state.
+    info = session_info or {}
+    proj_name = info.get("name")
+    saved_at  = info.get("saved_at")
+    print("")
+    ui_open("PROJECT STATUS", 'green')
+    if proj_name:
+        ui_field("Active project", proj_name,
+                 frame_color='green', label_color='green', value_color='cyan')
+        ui_field("Last saved", saved_at or "unsaved — changes pending",
+                 frame_color='green', label_color='green',
+                 value_color=('white' if saved_at else 'yellow'))
+    else:
+        ui_field("Active project", "No active project loaded",
+                 frame_color='green', label_color='green', value_color='yellow')
+    ui_field("Storage time", fmt_datetime(),
+             frame_color='green', label_color='green', value_color='white')
+    ui_close('green')
     
     # Get user input with improved prompt
     print("")

@@ -10,6 +10,7 @@ load definitions, analysis, postprocessing, and project save/load functionalitie
 import json
 import os
 import sys
+import datetime
 # pyrefly: ignore [missing-import]
 import numpy as np
 import time
@@ -55,7 +56,8 @@ from solver.stress_solver import (first_moment_of_area_general,
 from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
                  display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
                  postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library,
-                 ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head, ui_footer)
+                 ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head, ui_footer,
+                 fmt_datetime, fmt_date_compact, fmt_duration)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification,define_continuous_supports,get_solver_resolution,define_custom_material,define_custom_supports
 
 
@@ -204,10 +206,23 @@ def load_project():
     
     print(colored("┌─ SELECT A PROJECT "+"─"*42, 'yellow', attrs=['bold']))
     
-    # Display available projects in a nicer format
+    # Display available projects with their save date and key parameters.
     for idx, proj in enumerate(beam_storage, 1):
-        print(colored(f"│ {idx:2d} │ {proj['name']}", 'yellow') + 
-              colored(f" ({proj.get('beam_type', 'Unknown')} Beam, Length: {proj.get('beam_length', 'N/A')} m)", 'white'))
+        disp_name = proj.get('base_name') or proj.get('name', 'Untitled')
+        saved_lbl = proj.get('saved_display')
+        if not saved_lbl and proj.get('saved_at'):
+            try:
+                saved_lbl = fmt_datetime(datetime.datetime.fromisoformat(proj['saved_at']))
+            except Exception:
+                saved_lbl = None
+        saved_lbl = saved_lbl or "date not recorded"
+        btype = proj.get('beam_type', 'Unknown')
+        blen = proj.get('beam_length', 'N/A')
+        print(colored(f"│ {idx:2d} │ ", 'yellow')
+              + colored(disp_name, 'cyan', attrs=['bold'])
+              + colored(f"  ({btype} Beam, L = {blen} m)", 'white'))
+        print(colored("│    │   ", 'yellow')
+              + colored("💾 saved ", 'green') + colored(saved_lbl, 'white'))
     
     print(colored("└───" + "─"*57, 'yellow', attrs=['bold']))
     print("\n")
@@ -334,6 +349,14 @@ def load_project():
 def print_loaded_project_summary():
     """Display a summary of the loaded project."""
     print(colored(f"\nLoaded Project Summary:", 'green'))
+    if current_project and (current_project.get('saved_display') or current_project.get('saved_at')):
+        _sv = current_project.get('saved_display')
+        if not _sv:
+            try:
+                _sv = fmt_datetime(datetime.datetime.fromisoformat(current_project['saved_at']))
+            except Exception:
+                _sv = "unknown"
+        print(colored(f"Saved: {_sv}", 'green'))
     print(f"Beam Length: {beam_length} m")
     print(f"Supports: A : {A} m ({A_type}), B : {B} m ({B_type})")
     
@@ -474,11 +497,18 @@ def save_project():
     """
     global beam_storage, current_project, project_state, beam_type, support_types
     
-    project_name = input(colored("Enter a name for this project ➔ ", 'cyan')).strip()
-    
-    if not project_name:
+    base_name = input(colored("Enter a name for this project ➔ ", 'cyan')).strip()
+
+    if not base_name:
         print_error("Project name cannot be empty!")
         return False
+
+    # Auto-stamp the save with the current local date/time. The visible project
+    # name carries the timestamp so the Load menu always shows when it was saved.
+    now = datetime.datetime.now().astimezone()
+    saved_iso = now.isoformat()
+    saved_display = fmt_datetime(now)
+    project_name = f"{base_name}  [{fmt_date_compact(now)}]"
 
     # Create proper profile data structure
     profile_data = {
@@ -498,6 +528,9 @@ def save_project():
     # Create project data dictionary
     project_data = {
         'name': project_name,
+        'base_name': base_name,
+        'saved_at': saved_iso,
+        'saved_display': saved_display,
         'unit_system': current_unit_system,
         'beam_type': beam_type,
         'beam_length': beam_length,
@@ -519,10 +552,14 @@ def save_project():
     }
 
 
-    # Check if project with this name already exists
+    # Detect an existing project with the same base name (ignoring the date
+    # stamp) so re-saving a project updates it in place with a fresh timestamp.
+    def _base_of(proj):
+        return (proj.get('base_name') or proj.get('name', '')).split('  [')[0]
+
     for idx, proj in enumerate(beam_storage):
-        if proj['name'].lower() == project_name.lower():
-            confirmation = input(colored(f"Project '{project_name}' already exists. Overwrite? (Y/N): ", 'cyan'))
+        if _base_of(proj).lower() == base_name.lower():
+            confirmation = input(colored(f"Project '{base_name}' already exists. Overwrite with a new dated save? (Y/N): ", 'cyan'))
             if confirmation.lower() == 'y':
                 beam_storage[idx] = project_data
                 print_success(f"Project '{project_name}' updated successfully!")
@@ -793,6 +830,31 @@ def check_unsaved_changes():
     return False
 
 # =============================
+def _session_info():
+    """Assemble the live status payload shown in the SESSION/PROJECT panels."""
+    name = saved = None
+    if current_project:
+        name = current_project.get('name') or current_project.get('base_name')
+        saved = current_project.get('saved_display')
+        if not saved and current_project.get('saved_at'):
+            try:
+                saved = fmt_datetime(datetime.datetime.fromisoformat(current_project['saved_at']))
+            except Exception:
+                saved = None
+    if project_state.get("has_unsaved_changes"):
+        saved = None  # force the "unsaved — changes pending" badge
+    steps_done = sum(bool(project_state.get(k)) for k in
+                     ("profile_saved", "material_saved", "supports_saved", "loads_saved"))
+    return {
+        "name": name,
+        "saved_at": saved,
+        "unit_system": current_unit_system,
+        "steps_done": steps_done,
+        "steps_total": 4,
+        "analysed": bool(project_state.get("analysis_complete")),
+    }
+
+
 def run_extended_menu():
     global current_unit_system, current_labels
     global current_project, project_state
@@ -810,7 +872,7 @@ def run_extended_menu():
     SectionsDB = SectionsDatabase() # <--- NEW
     
     while True:
-        selection = main_menu_template(num_points)
+        selection = main_menu_template(num_points, session_info=_session_info())
 
         # Validate selection based on beam_type status
         if selection in ['3', '4', '5', '6', '7', '8', '9', '10'] and beam_type is None:
@@ -833,7 +895,7 @@ def run_extended_menu():
 
         if selection == '1':  # Project Management
             while True:
-                sub_choice = project_management_menu()
+                sub_choice = project_management_menu(session_info=_session_info())
                 if sub_choice == '5':  # Back to main menu
                     break
                 elif sub_choice == '1':  # New project
