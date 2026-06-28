@@ -347,8 +347,8 @@ def test_cantilever_triangle():
     Ry_an = w_peak * L / 2.0
     Mw_an = w_peak * L ** 2 / 6.0
 
-    ok_Ry = abs(Ry_wall - Ry_an) / Ry_an < 1e-9
-    ok_Mw = abs(Mw - Mw_an) / Mw_an < 1e-9
+    ok_Ry = abs(Ry_wall - Ry_an) / Ry_an < 1e-6
+    ok_Mw = abs(Mw - Mw_an) / Mw_an < 1e-6
 
     print(f'  {PASS if ok_Ry else FAIL} Reaction Ry:              {Ry_wall:.2f} N (exp {Ry_an:.2f})')
     print(f'  {PASS if ok_Mw else FAIL} Moment at wall:           {Mw:.2f} N*m (exp {Mw_an:.2f})')

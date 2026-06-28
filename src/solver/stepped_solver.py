@@ -51,7 +51,9 @@ Perf 3 [Moderate] — np.linalg.cond() (full SVD, O(n³)) was called on
 -----------------------------------------------------------------------
 """
 
+# pyrefly: ignore [missing-import]
 import numpy as np
+# pyrefly: ignore [missing-import]
 from scipy.linalg import solve, LinAlgError as _SciLinAlgError
 import os
 import sys
@@ -180,7 +182,7 @@ def _build_mesh(
     # load span into multiple elements allows the piecewise-cubic Hermite
     # interpolation to converge, and the per-element linear M / constant V
     # recovery to become accurate.
-    MIN_LOAD_ELEMS = 20  # minimum sub-elements per load span
+    MIN_LOAD_ELEMS = 100  # minimum sub-elements per load span
 
     for load in (distributedloads or []):
         a = float(load[0])
