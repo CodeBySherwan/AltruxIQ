@@ -9,3 +9,4 @@ pytest
 termcolor>=2.0
 imageio>=2.19
 pillow>=9.0
+pandas>=2.2
