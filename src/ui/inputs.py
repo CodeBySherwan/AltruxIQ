@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 from termcolor import colored
 import time
@@ -198,6 +198,8 @@ def Beam_Classification():
          "\u25b3 \u2500\u2500\u2500\u2500 \u25cb \u2500\u2500\u2500\u2500 \u25cb \u2500\u2500\u2500\u2500 \u25cb"),
         ("7", "Custom Beam", "User-defined supports",
          "? \u2500\u2500\u2500\u2500 ? \u2500\u2500\u2500\u2500 ? \u2500\u2500\u2500\u2500 ?"),
+        ("8", "Stepped Bar", "Varying cross-section / material",
+         "\u2550\u2501\u2501\u2550\u2501\u2501\u2550\u2501\u2501\u2550   (axial + bending)"),
     ]
 
     print("\n")
@@ -212,15 +214,16 @@ def Beam_Classification():
     ui_close('yellow')
 
     print("")
-    classification = input(colored("  Enter your choice [1-7] \u2794 ", 'cyan', attrs=['bold']))
+    classification = input(colored("  Enter your choice [1-8] \u2794 ", 'cyan', attrs=['bold']))
 
     mapping = {
         '1': "Simple", '2': "Overhanging Beam", '3': "Cantilever",
         '4': "Fixed-Fixed", '5': "Propped", '6': "Continuous", '7': "Custom",
+        '8': "Stepped Bar",
     }
     if classification in mapping:
         return mapping[classification]
-    print_error("Invalid selection. Please choose a number between 1 and 7.")
+    print_error("Invalid selection. Please choose a number between 1 and 8.")
     time.sleep(1.5)
     return Beam_Classification()
 
@@ -415,7 +418,7 @@ def define_custom_supports(beam_length, unit_system="Metric", units=None):
             print_error("Invalid input. Please enter valid numeric digits.")
             time.sleep(1.5)
 #==================================================================================
-def manage_loads(unit_system="Metric", units=None):
+def manage_loads(unit_system="Metric", units=None, beam_type=None):
     if units is None:
         units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
     
@@ -501,24 +504,30 @@ def manage_loads(unit_system="Metric", units=None):
                 print("\n")
                 print(colored("┌─ LOAD TYPE "+"─"*48, 'green', attrs=['bold']))
                 print(colored("│ 1 - Vertical Load (Y-direction)", 'green'))
-                print(colored("│ 2 - Horizontal Load (X-direction)", 'green'))
-                print(colored("│ 3 - Angled Load (Force & Angle)", 'green'))
-                print(colored("└───" + "─"*57, 'green', attrs=['bold']))
+                # Only show horizontal/angled loads for stepped bars
+                if beam_type == "Stepped Bar":
+                    print(colored("│ 2 - Horizontal Load (X-direction)", 'green'))
+                    print(colored("│ 3 - Angled Load (Force & Angle)", 'green'))
+                print(colored("┄" + "─"*57, 'green', attrs=['bold']))
                 print("\n")
                 
-                load_type = input(colored("Enter your choice [1, 2, or 3] ➔ ", 'cyan'))
-                
+                if beam_type == "Stepped Bar":
+                    load_type = input(colored("Enter your choice [1, 2, or 3] ➔ ", 'cyan'))
+                else:
+                    load_type = input(colored("Enter your choice [1] ➔ ", 'cyan'))
                 if load_type == '1':
+                    
                     y_force = float(input(colored(f"\nEnter Y-force ({units['force']}) [positive up ↑, negative down ↓]: ➔ ", 'cyan'))) * f_mult
                     loads["pointloads"].append([pos, 0, y_force])
                     print_success(f"Added vertical point load: {y_force/f_mult} {units['force']} at x = {pos/l_mult} {units['length']}")
                 
-                elif load_type == '2':
+                
+                elif load_type == '2' and beam_type == "Stepped Bar":
                     x_force = float(input(colored(f"\nEnter X-force ({units['force']}) [positive right →, negative left ←]: ➔ ", 'cyan'))) * f_mult
                     loads["pointloads"].append([pos, x_force, 0])
                     print_success(f"Added horizontal point load: {x_force/f_mult} {units['force']} at x = {pos/l_mult} {units['length']}")
                 
-                elif load_type == '3':
+                elif load_type == '3' and beam_type == "Stepped Bar":
                     print("\n")
                     print(colored("┌─ ANGLED LOAD "+"─"*46, 'blue', attrs=['bold']))
                     print(colored("│  Angle measured from positive X-axis", 'blue'))
@@ -855,3 +864,209 @@ def define_custom_material(unit_system="Metric", units=None):
     }
 
     return material_dict
+#==================================================================================
+def define_stepped_segments(unit_system="Metric", units=None):
+    """
+    Interactive wizard for defining stepped beam segments.
+    Each segment has its own cross-section, material, and length.
+    
+    Returns a list of segment dicts:
+        [
+            {
+                "start": float, "end": float,
+                "E": float, "A": float, "I": float,
+                "shape": str, "section_dims": dict,
+                "c": float, "b": float, "y_array": np.ndarray,
+                "material_name": str,
+            }, ...
+        ]
+    """
+    import numpy as np
+    
+    if units is None:
+        units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
+    
+    l_mult = CONVERSION_TO_SI[unit_system]["length"]
+    inv_len = 1.0 / l_mult
+    
+    # Import needed modules (path injection is already done at top of inputs.py)
+    from solver import moi_solver
+    from solver.area_solver import area_from_section
+    from ui.Menus import choose_profile, print_error, print_success, clear_screen, print_title, print_option, display_section_library
+
+    segments = []
+    
+    while True:
+        clear_screen()
+        print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+        print(colored("║              STEPPED BEAM SEGMENT DEFINITION                 ║", 'cyan', attrs=['bold']))
+        print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+        print("")
+        
+        if segments:
+            print(colored("┌─ DEFINED SEGMENTS ─" + "─"*43, 'green', attrs=['bold']))
+            for i, seg in enumerate(segments, 1):
+                print(colored(f"│ {i}. {seg['shape']:15s}  L={seg['length']*inv_len:.3f} {units['length']}  E={seg['E']/1e9:.1f} GPa  A={seg['A']*1e6:.2f} mm²  I={seg['I']*1e12:.2e} mm⁴", 'white'))
+            print(colored("└" + "─"*62, 'green', attrs=['bold']))
+            print("")
+        
+        try:
+            num_segs = int(input(colored("Enter number of segments: ➔ ", 'cyan')))
+            if num_segs < 1:
+                print_error("At least 1 segment required.")
+                time.sleep(1.5)
+                continue
+            break
+        except ValueError:
+            print_error("Please enter a valid number.")
+            time.sleep(1.5)
+    
+    total_length = 0.0
+    
+    for i in range(num_segs):
+        clear_screen()
+        print(colored(f"╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+        print(colored(f"║           DEFINING SEGMENT {i+1} OF {num_segs}                             ║", 'cyan', attrs=['bold']))
+        print(colored(f"╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+        print("")
+        
+        # Segment length
+        seg_len_raw = ask_float(f"Segment {i+1} length", unit=units['length'], minimum=0, exclusive_min=True, allow_cancel=True)
+        if seg_len_raw is None:
+            return None
+        seg_len = seg_len_raw * l_mult
+        
+        # Cross-section selection
+        print("")
+        print(colored("┌─ SELECT CROSS-SECTION FOR THIS SEGMENT ─" + "─"*20, 'yellow', attrs=['bold']))
+        
+        from database.sections_database import SectionsDatabase
+        sections_db = SectionsDatabase()
+        
+        while True:
+            print_option("  1. ✍️  Enter Custom Dimensions (Manual)")
+            print_option("  2. 📚 Standard Section Library")
+            print_option("  3. 💾 My Saved Sections")
+            print("")
+            src_choice = input(colored("Choose option [1-3] ➔ ", 'cyan')).strip()
+            
+            result = None
+            if src_choice == '1':
+                profile_choice = choose_profile()
+                if profile_choice in ('1', '2', '3', '4', '5', '6', '7', '8'):
+                    if profile_choice == '1': result = moi_solver.inertia_moment_ibeam(units=units)
+                    elif profile_choice == '2': result = moi_solver.inertia_moment_tbeam(units=units)
+                    elif profile_choice == '3': result = moi_solver.inertia_moment_circle(units=units)
+                    elif profile_choice == '4': result = moi_solver.inertia_moment_hollow_circle(units=units)
+                    elif profile_choice == '5': result = moi_solver.inertia_moment_square(units=units)
+                    elif profile_choice == '6': result = moi_solver.inertia_moment_hollow_square(units=units)
+                    elif profile_choice == '7': result = moi_solver.inertia_moment_rectangle(units=units)
+                    elif profile_choice == '8': result = moi_solver.inertia_moment_hollow_rectangle(units=units)
+                else:
+                    print_error("Invalid profile selection.")
+                    continue
+                if result is None:
+                    print_error("Invalid dimensions entered. Try again.")
+                    continue
+                break
+                
+            elif src_choice == '2':
+                families = sections_db.get_standard_families()
+                if not families:
+                    print_error("Standard library is empty or missing.")
+                    continue
+                clear_screen()
+                print_title("STANDARD SECTION FAMILIES")
+                for j, fam in enumerate(families, 1):
+                    print_option(f"  {j}. {fam}")
+                print_option(f"  0. Back")
+                print("")
+                try:
+                    fam_idx = int(input(colored("Choose a family ➔ ", 'cyan')))
+                    if fam_idx == 0: continue
+                    selected_family = families[fam_idx - 1]
+                    sections_in_fam = sections_db.get_sections_in_family(selected_family)
+                    sec_idx = display_section_library(sections_in_fam, title=f"{selected_family} Sections", is_custom=False)
+                    if sec_idx is not None:
+                        entry = sections_in_fam[sec_idx]
+                        result = moi_solver.load_section_from_library(entry)
+                        if result:
+                            break
+                        else:
+                            print_error("Failed to parse section data.")
+                except (ValueError, IndexError):
+                    print_error("Invalid selection.")
+                    time.sleep(1)
+                    continue
+                    
+            elif src_choice == '3':
+                custom_secs = sections_db.list_custom_sections()
+                if not custom_secs:
+                    print_error("No saved custom sections found.")
+                    continue
+                sec_idx = display_section_library(custom_secs, title="MY SAVED SECTIONS", is_custom=True)
+                if sec_idx is not None:
+                    entry = custom_secs[sec_idx]
+                    result = moi_solver.load_section_from_library(entry)
+                    if result:
+                        break
+                    else:
+                        print_error("Failed to parse section data.")
+            else:
+                print_error("Invalid choice. Please enter 1, 2, or 3.")
+        
+        Ix, shape, c, b, y_array, section_dims = result
+        
+        # Compute cross-sectional area
+        try:
+            A = area_from_section(shape, section_dims)
+        except Exception as e:
+            print_error(f"Error computing area: {e}")
+            time.sleep(2)
+            return None
+        
+        # Material selection from library
+        print("")
+        print(colored("┌─ SELECT MATERIAL FOR THIS SEGMENT ─" + "─"*20, 'magenta', attrs=['bold']))
+        
+        from ui.cli import select_material, load_material_database, Materials
+        if Materials is None:
+            load_material_database()
+            
+        selected_mat = select_material(unit_system, units)
+        if selected_mat is None:
+            print_error("Material selection is required for segment.")
+            time.sleep(1.5)
+            return None
+            
+        E = float(selected_mat["Elastic Modulus"]) * 1e9
+        E_gpa = float(selected_mat["Elastic Modulus"])
+        yield_mpa = float(selected_mat["Yield Strength"])
+        material_name = selected_mat["Material"]
+        
+        seg_start = total_length
+        seg_end = total_length + seg_len
+        total_length = seg_end
+        
+        segments.append({
+            "start": seg_start,
+            "end": seg_end,
+            "length": seg_len,
+            "E": E,
+            "A": A,
+            "I": Ix,
+            "shape": shape,
+            "section_dims": section_dims,
+            "c": c,
+            "b": b,
+            "y_array": y_array,
+            "material_name": material_name,
+            "yield_strength": yield_mpa * 1e6,
+        })
+        
+        print_success(f"Segment {i+1} defined: {shape}, L={seg_len*inv_len:.3f} {units['length']}")
+        time.sleep(1)
+    
+    print_success(f"All {num_segs} segments defined. Total length = {total_length*inv_len:.3f} {units['length']}")
+    time.sleep(1.5)
+    return segments

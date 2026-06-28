@@ -32,6 +32,8 @@ if src_dir not in sys.path:
 from database.sections_database import SectionsDatabase
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
 from solver.indeterminate_solver import solve_beam
+from solver.stepped_solver import solve_stepped_beam
+from solver.area_solver import area_from_section
 from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
                       Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined)
@@ -59,7 +61,7 @@ from ui.Menus import (main_menu_template, project_management_menu, profile_defin
                  postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library,
                  ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head, ui_footer,
                  fmt_datetime, fmt_date_compact, fmt_duration)
-from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification,define_continuous_supports,get_solver_resolution,define_custom_material,define_custom_supports
+from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_stepped_segments, define_continuous_supports, get_solver_resolution, define_custom_material, define_custom_supports
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -120,6 +122,12 @@ Slope = None
 Shear_stress = None
 bending_stress = None
 FOS = None
+
+# Stepped beam globals
+segments = []          # list of segment dicts for stepped beams
+AxialForce = None
+AxialDisplacement = None
+
 project_state = {
     "is_loaded": False,
     "profile_saved": False, 
@@ -136,10 +144,14 @@ project_state = {
 def New_Project():
     """Start a new project by resetting the current project."""
     global current_project, project_state, beam_type, support_types, current_unit_system, current_labels
+    global segments, AxialForce, AxialDisplacement
     current_project = None  # Reset current project data
     beam_type = None        # BUG-05 FIX: reset beam_type so menu guards work correctly
     support_types = ("pin", "roller")  # BUG-10 FIX: reset to safe default
     num_points = 2001
+    segments = []
+    AxialForce = None
+    AxialDisplacement = None
     current_unit_system = "Metric"        # <-- RESET UNITS
     current_labels = METRIC_LABELS
     # Reset project state flags
@@ -180,7 +192,8 @@ def load_project():
     global Ix, shape, c, b, y_array, section_dims, project_state
     global elastic_modulus, selected_material, density, yield_strength, ultimate_strength, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads
-    global beam_type, support_types , current_unit_system 
+    global beam_type, support_types , current_unit_system, supports_list
+    global segments, AxialForce, AxialDisplacement
     
     load_projects_from_disk()
 
@@ -330,12 +343,21 @@ def load_project():
         else:
             selected_material = {}
 
+        # Load stepped beam segments if present
+        segments = current_project.get('segments', [])
+        if segments:
+            project_state["profile_saved"] = True
+            beam_length = segments[-1]["end"] if segments else 0.0
+
+        # Load custom supports list if present
+        supports_list = current_project.get('supports_list', [])
+
         # Update project state flags
         project_state["is_loaded"] = True
         project_state["profile_saved"] = bool(shape) and Ix > 0
         project_state["material_saved"] = bool(selected_material)
         project_state["loads_saved"] = bool(loads)
-        project_state["supports_saved"] = bool(A_type) and bool(B_type)
+        project_state["supports_saved"] = (bool(A_type) and bool(B_type)) or bool(supports_list)
         project_state["has_unsaved_changes"] = False
 
         # Optional: Show confirmation summary
@@ -549,7 +571,9 @@ def save_project():
         'Reactions': Reactions,  # NEW: Already a list of dicts, no serialization needed
         'loads': loads if loads is not None else {},
         'profile': profile_data,
-        'material': material_data
+        'material': material_data,
+        'segments': segments,  # Stepped beam segments
+        'supports_list': supports_list,  # Custom/Continuous/Stepped supports
     }
 
 
@@ -924,11 +948,11 @@ def run_extended_menu():
         elif selection == '2':  # Define Beam Type
             while True:
                 beam_type = Beam_Classification()
-                if beam_type in ["Simple", "Cantilever", "Fixed-Fixed", "Propped", "Continuous", "Overhanging Beam", "Custom"]:
+                if beam_type in ["Simple", "Cantilever", "Fixed-Fixed", "Propped", "Continuous", "Overhanging Beam", "Custom","Stepped Bar"]:
                     # Automatically fulfill the supports gate logic for fixed boundary types
                     if beam_type in ("Cantilever", "Fixed-Fixed", "Propped"):
                         project_state["supports_saved"] = True
-                    elif beam_type in ("Continuous", "Overhanging Beam", "Custom"):
+                    elif beam_type in ("Continuous", "Overhanging Beam", "Custom", "Stepped Bar"):
                         project_state["supports_saved"] = False
                    
                     # Update beam_type in current_project if it exists
@@ -983,7 +1007,19 @@ def run_extended_menu():
                         confirmation = input(colored("Project already has a profile defined. Modify? (Y/N): ", 'cyan'))
                         if confirmation.lower() != 'y':
                             continue
-                            
+                    
+                    # Stepped Bar: use segment definition wizard instead of single profile
+                    if beam_type == "Stepped Bar":
+                        seg_result = define_stepped_segments(current_unit_system, current_labels)
+                        if seg_result is not None:
+                            segments = seg_result
+                            beam_length = segments[-1]["end"] if segments else 0.0
+                            project_state["profile_saved"] = True
+                            project_state["has_unsaved_changes"] = True
+                            print_success("Stepped beam segments defined successfully!")
+                            time.sleep(1.5)
+                        continue
+                        
                     while True:
                         src_choice = profile_source_menu()
                         if src_choice == '6':  # Back
@@ -1128,11 +1164,11 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
                         
-                    display_profile_info(beam_length, shape, Ix, c, b, y_array, units=current_labels)
+                    display_profile_info(beam_length, shape, Ix, c, b, y_array, units=current_labels, beam_type=beam_type, segments=segments)
 
         elif selection == '4':  # Material Selection
             while True:
-                sub_choice = material_selection_menu()
+                sub_choice = material_selection_menu(beam_type=beam_type, segments=segments, units=current_labels)
                 if sub_choice == '5':  # Back to main menu
                     break
                 elif sub_choice == '1':  # Select material
@@ -1147,12 +1183,47 @@ def run_extended_menu():
                                 continue    
                     selected_material = select_material(current_unit_system, current_labels)
                     if selected_material:
-                        density = float(selected_material["Density"])
-                        yield_strength = float(selected_material["Yield Strength"]) * 1e6
-                        ultimate_strength = float(selected_material["Ultimate Strength"]) * 1e6
-                        elastic_modulus = float(selected_material["Elastic Modulus"]) * 1e9
-                        poisson_ratio = float(selected_material["Poisson Ratio"])
-                        shear_yield_strength = 0.55 * yield_strength
+                        # For stepped bars, ask whether to apply to all or specific segment
+                        if beam_type == "Stepped Bar" and segments:
+                            print("\n")
+                            print(colored("\u250c\u2500 APPLY MATERIAL TO " + "\u2500"*40, 'yellow', attrs=['bold']))
+                            print(colored("\u2502 1. All segments", 'yellow'))
+                            for idx, seg in enumerate(segments, 1):
+                                seg_len = seg['end'] - seg['start']
+                                print(colored(f"\u2502 {idx+1}. Segment {idx} ({seg['shape']}, L={seg_len:.3f} m)", 'yellow'))
+                            print(colored("\u2504" + "\u2500"*57, 'yellow', attrs=['bold']))
+                            print("\n")
+                            mat_choice = input(colored(f"Enter your choice [1-{len(segments)+1}] \u2794 ", 'cyan'))
+                            try:
+                                mat_idx = int(mat_choice)
+                                if mat_idx == 1:
+                                    for seg in segments:
+                                        seg['material_name'] = selected_material['Material']
+                                        seg['yield_strength'] = float(selected_material['Yield Strength']) * 1e6
+                                        seg['E'] = float(selected_material['Elastic Modulus']) * 1e9
+                                    print_success(f"Applied {selected_material['Material']} to all segments!")
+                                elif 2 <= mat_idx <= len(segments) + 1:
+                                    seg_idx = mat_idx - 2
+                                    segments[seg_idx]['material_name'] = selected_material['Material']
+                                    segments[seg_idx]['yield_strength'] = float(selected_material['Yield Strength']) * 1e6
+                                    segments[seg_idx]['E'] = float(selected_material['Elastic Modulus']) * 1e9
+                                    print_success(f"Applied {selected_material['Material']} to Segment {seg_idx+1}!")
+                                else:
+                                    print_error("Invalid selection.")
+                                    time.sleep(1.5)
+                                    continue
+                            except ValueError:
+                                print_error("Invalid input.")
+                                time.sleep(1.5)
+                                continue
+                        else:
+                            density = float(selected_material["Density"])
+                            yield_strength = float(selected_material["Yield Strength"]) * 1e6
+                            ultimate_strength = float(selected_material["Ultimate Strength"]) * 1e6
+                            elastic_modulus = float(selected_material["Elastic Modulus"]) * 1e9
+                            poisson_ratio = float(selected_material["Poisson Ratio"])
+                            shear_yield_strength = 0.55 * yield_strength
+                        
                         project_state["material_saved"] = True
                         project_state["has_unsaved_changes"] = True
                         
@@ -1166,18 +1237,61 @@ def run_extended_menu():
                         print_error("No material selected yet.")
                         time.sleep(2)
                         continue
-        
-                    display_material_info(
-                        selected_material, 
-                        density, 
-                        yield_strength, 
-                        ultimate_strength, 
-                        elastic_modulus, 
-                        poisson_ratio, 
-                        shear_yield_strength,
-                        current_unit_system,
-                        current_labels
-                    )
+                    
+                    # For stepped bars, ask which segment to view
+                    if beam_type == "Stepped Bar" and segments:
+                        print("\n")
+                        print(colored("\u250c\u2500 VIEW MATERIAL FOR SEGMENT " + "\u2500"*37, 'yellow', attrs=['bold']))
+                        for idx, seg in enumerate(segments, 1):
+                            seg_len = seg['end'] - seg['start']
+                            mat_name = seg.get('material_name', 'Unknown')
+                            print(colored(f"\u2502 {idx}. Segment {idx} ({seg['shape']}, L={seg_len:.3f} m) \u2014 {mat_name}", 'yellow'))
+                        print(colored("\u2504" + "\u2500"*57, 'yellow', attrs=['bold']))
+                        print("\n")
+                        view_choice = input(colored(f"Enter segment number [1-{len(segments)}] or 0 to cancel \u2794 ", 'cyan'))
+                        try:
+                            v_idx = int(view_choice)
+                            if v_idx == 0:
+                                continue
+                            if 1 <= v_idx <= len(segments):
+                                seg = segments[v_idx - 1]
+                                seg_material = {
+                                    'Material': seg.get('material_name', 'Unknown'),
+                                    'Density': 0,
+                                    'Yield Strength': seg.get('yield_strength', 0) / 1e6,
+                                    'Ultimate Strength': 0,
+                                    'Elastic Modulus': seg.get('E', 0) / 1e9,
+                                    'Poisson Ratio': 0,
+                                }
+                                display_material_info(
+                                    seg_material, 
+                                    0, 
+                                    seg.get('yield_strength', 0), 
+                                    0, 
+                                    seg.get('E', 0), 
+                                    0, 
+                                    0.55 * seg.get('yield_strength', 0),
+                                    current_unit_system,
+                                    current_labels
+                                )
+                            else:
+                                print_error("Invalid selection.")
+                                time.sleep(1.5)
+                        except ValueError:
+                            print_error("Invalid input.")
+                            time.sleep(1.5)
+                    else:
+                        display_material_info(
+                            selected_material, 
+                            density, 
+                            yield_strength, 
+                            ultimate_strength, 
+                            elastic_modulus, 
+                            poisson_ratio, 
+                            shear_yield_strength,
+                            current_unit_system,
+                            current_labels
+                        )
 
                 elif sub_choice == '3':  # Add Custom Material
                     new_mat = define_custom_material(current_unit_system, current_labels)
@@ -1264,6 +1378,20 @@ def run_extended_menu():
                     else "roller" for s in supports_list
                 )
 
+            elif beam_type == "Stepped Bar":
+                if not segments:
+                    print_error("Please define stepped beam segments first (Menu 3).")
+                    time.sleep(2)
+                    continue
+                supports_list = define_custom_supports(beam_length, current_unit_system, current_labels)
+                project_state["supports_saved"] = True
+                project_state["has_unsaved_changes"] = True
+                support_types = tuple(
+                    "pin" if tuple(s["dof"]) == (1,1,0) 
+                    else "fixed" if tuple(s["dof"]) == (1,1,1) 
+                    else "roller" for s in supports_list
+                )
+
             elif beam_type == "Overhanging Beam":
                   while True:
                     sub_choice = boundary_conditions_menu()
@@ -1328,7 +1456,7 @@ def run_extended_menu():
                                 continue
                     
                         print("Define Loads:")
-                        loads_dict = manage_loads(current_unit_system, current_labels)
+                        loads_dict = manage_loads(current_unit_system, current_labels, beam_type)
                         pointloads = loads_dict.get("pointloads", [])
                         distributedloads = loads_dict.get("distributedloads", [])
                         momentloads = loads_dict.get("momentloads", [])
@@ -1464,22 +1592,34 @@ def run_extended_menu():
                                 {"pos": 0.0,         "dof": (1,1,1), "ky": None, "kx": None},
                                 {"pos": beam_length, "dof": (0,1,0), "ky": None, "kx": None},
                             ]
-                        elif beam_type == "Continuous" or beam_type == "Custom":
+                        elif beam_type == "Continuous" or beam_type == "Custom" or beam_type == "Stepped Bar":
                             _supports = supports_list
 
-                        # Invoke unified SymPy solver adapter
-                        result = solve_beam(
-                            beam_length=beam_length,
-                            beam_type=beam_type,
-                            supports=_supports,
-                            pointloads=pointloads,
-                            distributedloads=distributedloads,
-                            momentloads=momentloads,
-                            triangleloads=triangleloads,
-                            E=elastic_modulus,
-                            I=Ix,
-                            num_points=num_points 
-                        )
+                        # Dispatch to appropriate solver
+                        if beam_type == "Stepped Bar":
+                            result = solve_stepped_beam(
+                                segments=segments,
+                                supports=_supports,
+                                pointloads=pointloads,
+                                distributedloads=distributedloads,
+                                momentloads=momentloads,
+                                triangleloads=triangleloads,
+                                num_points=num_points
+                            )
+                        else:
+                            # Invoke unified SymPy solver adapter
+                            result = solve_beam(
+                                beam_length=beam_length,
+                                beam_type=beam_type,
+                                supports=_supports,
+                                pointloads=pointloads,
+                                distributedloads=distributedloads,
+                                momentloads=momentloads,
+                                triangleloads=triangleloads,
+                                E=elastic_modulus,
+                                I=Ix,
+                                num_points=num_points 
+                            )
                         
                         # Populate global response arrays directly
                         X_Field = result["X_Field"]
@@ -1489,6 +1629,9 @@ def run_extended_menu():
                         Reactions = result["Reactions"]
                         Slopes = result["Slopes"]
                         Curvatures = result["Curvatures"]
+                        # Stepped bar extras
+                        AxialForce = result.get("AxialForce", None)
+                        AxialDisplacement = result.get("AxialDisplacement", None)
                         # Analysis and deflection calculated in one pass
                         project_state["analysis_complete"] = True
                         project_state["deflection_calculated"] = True
@@ -1641,19 +1784,62 @@ def run_extended_menu():
                         print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
         
                         # Perform actual calculations
-                        #BUG-09 FIX: build section-aware b(y) for correct τ = VQ/(Ib(y))
-                        b_array = width_array_for_section(shape, section_dims, y_array)
-                        Q_array = first_moment_of_area_general(b_array, y_array)
-                        Shear_stress = calculate_shear_stress(Total_ShearForce, Q_array, Ix, b_array)
-                        Max_Shear_stress = np.max(np.abs(Shear_stress))
-
-                        # Calculate bending stress
-                        bending_stress = calculate_bending_stress(Total_BendingMoment, c, Ix)
-                        Max_bending_stress = np.max(np.abs(bending_stress))
-        
-                        # Calculate factor of safety
-                        FOS = Factor_of_Safety(Total_BendingMoment, c, yield_strength, Ix)
-        
+                        if beam_type == "Stepped Bar":
+                            # Per-segment stress computation for stepped bars
+                            Shear_stress = np.zeros((len(y_array), len(X_Field)))
+                            bending_stress = np.zeros(len(X_Field))
+                            min_fos = float('inf')
+                            for i, x in enumerate(X_Field):
+                                seg = None
+                                for s in segments:
+                                    if s['start'] <= x <= s['end']:
+                                        seg = s
+                                        break
+                                if seg is None:
+                                    continue
+                                A_seg = seg['A']
+                                I_seg = seg['I']
+                                c_seg = seg['c']
+                                b_seg = seg['b']
+                                y_seg = seg['y_array']
+                                shape_seg = seg['shape']
+                                dims_seg = seg['section_dims']
+                                ys_seg = seg['yield_strength']
+                                b_arr = width_array_for_section(shape_seg, dims_seg, y_seg)
+                                Q_arr = first_moment_of_area_general(b_arr, y_seg)
+                                tau = calculate_shear_stress(Total_ShearForce[i], Q_arr, I_seg, b_arr)
+                                Shear_stress[:, i] = tau
+                                sigma = calculate_bending_stress(Total_BendingMoment[i], c_seg, I_seg)
+                                bending_stress[i] = sigma
+                                if ys_seg > 0:
+                                    fos_pt = ys_seg / max(abs(sigma), 1e-12)
+                                    if fos_pt < min_fos:
+                                        min_fos = fos_pt
+                            Max_Shear_stress = np.max(np.abs(Shear_stress))
+                            Max_bending_stress = np.max(np.abs(bending_stress))
+                            FOS = min_fos if min_fos != float('inf') else 0.0
+                            # Use a composite material dict for display
+                            if segments:
+                                min_yield_seg = min(s.get('yield_strength', 0) for s in segments)
+                                comp_material = {
+                                    'Material': 'Varies (Stepped Bar)',
+                                    'Yield Strength': min_yield_seg / 1e6,
+                                }
+                            else:
+                                comp_material = selected_material
+                        else:
+                            #BUG-09 FIX: build section-aware b(y) for correct τ = VQ/(Ib(y))
+                            b_array = width_array_for_section(shape, section_dims, y_array)
+                            Q_array = first_moment_of_area_general(b_array, y_array)
+                            Shear_stress = calculate_shear_stress(Total_ShearForce, Q_array, Ix, b_array)
+                            Max_Shear_stress = np.max(np.abs(Shear_stress))
+                            # Calculate bending stress
+                            bending_stress = calculate_bending_stress(Total_BendingMoment, c, Ix)
+                            Max_bending_stress = np.max(np.abs(bending_stress))
+                            # Calculate factor of safety
+                            FOS = Factor_of_Safety(Total_BendingMoment, c, yield_strength, Ix)
+                            comp_material = selected_material
+                        
                         # Update project state
                         project_state["stress_calculated"] = True
                         project_state["has_unsaved_changes"] = True
@@ -1662,7 +1848,7 @@ def run_extended_menu():
                         display_stress_analysis(
                             beam_type=beam_type,
                             shape=shape,
-                            selected_material=selected_material,
+                            selected_material=comp_material,
                             Ix=Ix,
                             c=c,
                             b=b,
@@ -1674,7 +1860,8 @@ def run_extended_menu():
                             bending_stress=bending_stress,
                             Max_bending_stress=Max_bending_stress,
                             FOS=FOS,
-                            units=current_labels
+                            units=current_labels,
+                            segments=segments
                         )
         
                     except Exception as e:
@@ -1683,8 +1870,10 @@ def run_extended_menu():
                         continue
         elif selection == '9':  # Postprocessing/Visualization
             while True:
-                sub_choice = postprocessing_menu()
-                if sub_choice == '10':  # Back to main menu
+                sub_choice = postprocessing_menu(beam_type)
+                # Back choice depends on menu size (10 base + 3 stepped extras if applicable)
+                back_choice = '13' if beam_type == "Stepped Bar" else '10'
+                if sub_choice == back_choice:  # Back to main menu
                     break
                     
                 # Check if analysis has been completed before allowing visualization
@@ -1832,7 +2021,98 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '9':  # 3D FEA Contour View (PyVista)
+                elif sub_choice == '9':  # Axial-Force Plot (Stepped Bar only)
+                    if beam_type != "Stepped Bar":
+                        print_error("Axial analysis is only available for Stepped Bars.")
+                        time.sleep(2)
+                        continue
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Axial Force Plot (Matplotlib):")
+                            Matplot_sfd_bmd(X_Field, AxialForce, Total_BendingMoment, 'Axial Force', units=current_labels)
+                        elif style == '2':
+                            print_success("Processing Axial Force Plot (Plotly):")
+                            Plotly_sfd_bmd(X_Field, AxialForce, Total_BendingMoment, beam_length, 'Axial Force', units=current_labels)
+                        else:
+                            print_error("Invalid style selection.")
+                            time.sleep(2)
+                            continue
+                    except Exception as e:
+                        print_error(f"Error plotting Axial Force Plot: {e}")
+                        time.sleep(2)
+                        continue
+
+                elif sub_choice == '10':  # Axial-Displacement Plot (Stepped Bar only)
+                    if beam_type != "Stepped Bar":
+                        print_error("Axial analysis is only available for Stepped Bars.")
+                        time.sleep(2)
+                        continue
+                    try:
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Axial Displacement Plot (Matplotlib):")
+                            Matplot_Deflection(X_Field, AxialDisplacement, units=current_labels)
+                        elif style == '2':
+                            print_success("Processing Axial Displacement Plot (Plotly):")
+                            Plotly_Deflection(X_Field, AxialDisplacement, beam_length, units=current_labels)
+                        else:
+                            print_error("Invalid style selection.")
+                            time.sleep(2)
+                            continue
+                    except Exception as e:
+                        print_error(f"Error plotting Axial Displacement Plot: {e}")
+                        time.sleep(2)
+                        continue
+
+                elif sub_choice == '11':  # Combined Stress (Stepped Bar only)
+                    if beam_type != "Stepped Bar":
+                        print_error("Combined stress analysis is only available for Stepped Bars.")
+                        time.sleep(2)
+                        continue
+                    try:
+                        # Compute combined stress: sigma_bending + sigma_axial
+                        # For each segment, find max axial stress and combine with bending
+                        from plotting.main_plotting import Matplot_BendingStress, Plotly_BendingStress
+                        combined_stress = np.zeros_like(X_Field)
+                        for i, x in enumerate(X_Field):
+                            # Find which segment this x belongs to
+                            seg = None
+                            for s in segments:
+                                if s["start"] <= x <= s["end"]:
+                                    seg = s
+                                    break
+                            if seg is None:
+                                continue
+                            A_seg = seg["A"]
+                            I_seg = seg["I"]
+                            c_seg = seg["c"]
+                            # Axial stress
+                            sigma_axial = AxialForce[i] / A_seg if AxialForce is not None else 0.0
+                            # Bending stress (maximum at extreme fiber)
+                            M_val = Total_BendingMoment[i]
+                            sigma_bending = abs(M_val) * c_seg / I_seg if I_seg > 0 else 0.0
+                            # Combined stress (tension positive)
+                            sign = 1.0 if M_val >= 0 else -1.0  # simplistic sign handling
+                            combined_stress[i] = sigma_axial + sign * sigma_bending
+                        
+                        style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
+                        if style == '1':
+                            print_success("Processing Combined Stress Plot (Matplotlib):")
+                            Matplot_BendingStress(X_Field, combined_stress, beam_length, units=current_labels)
+                        elif style == '2':
+                            print_success("Processing Combined Stress Plot (Plotly):")
+                            Plotly_BendingStress(X_Field, combined_stress, beam_length, units=current_labels)
+                        else:
+                            print_error("Invalid style selection.")
+                            time.sleep(2)
+                            continue
+                    except Exception as e:
+                        print_error(f"Error plotting Combined Stress Plot: {e}")
+                        time.sleep(2)
+                        continue
+
+                elif sub_choice == '12':  # 3D FEA Contour View (PyVista)
                     if not _PYVISTA_AVAILABLE:
                         print_error(f"PyVista is not available: {_pv_import_error}")
                         print_error("Run:  pip install pyvista")
@@ -2051,7 +2331,8 @@ def run_extended_menu():
                     max_stress=max_stress,
                     max_defl=max_defl,
                     span_ratio=span_ratio,
-                    yield_strength=yield_strength if 'yield_strength' in globals() else None
+                    yield_strength=yield_strength if 'yield_strength' in globals() else None,
+                    segments=segments
                 )
     
             except Exception as e:

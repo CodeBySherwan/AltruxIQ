@@ -634,7 +634,7 @@ def display_section_library(sections, title="SECTION LIBRARY", is_custom=False):
     time.sleep(1)
     return None
 
-def material_selection_menu():
+def material_selection_menu(beam_type=None, segments=None, units=None):
     """Display an enhanced material selection menu and return the user's choice."""
     clear_screen()
     
@@ -645,6 +645,22 @@ def material_selection_menu():
     print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
     print("\n")
     
+    # Segment material status bar for Stepped Bar
+    if beam_type == "Stepped Bar" and segments:
+        print(colored("┌─ STEPPED BAR SEGMENT MATERIALS ─────────────────────────────", 'magenta', attrs=['bold']))
+        len_div = 1.0
+        len_unit = "m"
+        if units and units.get('length') == 'ft':
+            len_div = 0.3048
+            len_unit = "ft"
+        
+        for idx, seg in enumerate(segments, 1):
+            seg_len = (seg['end'] - seg['start']) / len_div
+            mat_name = seg.get('material_name', 'Unknown')
+            print(colored(f"│ • Seg {idx} ({seg_len:.2f} {len_unit}): {mat_name}", 'magenta'))
+        print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
+        print("\n")
+
     # Create a visually distinct menu with icons and better formatting
     print(colored("┌─ OPTIONS "+"─"*52, 'yellow', attrs=['bold']))
     
@@ -766,7 +782,7 @@ def analysis_simulation_menu():
     return choice
 
 
-def postprocessing_menu():
+def postprocessing_menu(beam_type=None):
     """Display an enhanced postprocessing/visualization menu and return the user's choice."""
     clear_screen()
     
@@ -789,9 +805,16 @@ def postprocessing_menu():
         ("📈 Bending-Stress",                    "Display Bending stress distribution"),
         ("📉 Deflection Plots",                  "Show beam displacement curves"),
         ("📑 Combined Plots",                    "Show all diagrams together (Plotly Only)"),
-        ("🧱 3D FEA Contour View",               "Commercial FEA-style 3D coloured contour plots (PyVista)"),
-        ("⬅️  Return to Main Menu",               "Go back to the main menu"),
     ]
+    
+    # Stepped bar extras
+    if beam_type == "Stepped Bar":
+        menu_items.append(("📈 Axial-Force Plot",       "Display axial force diagram"))
+        menu_items.append(("📈 Axial-Displacement Plot", "Display axial displacement diagram"))
+        menu_items.append(("📈 Combined Stress",         "Display combined bending + axial stress"))
+    
+    menu_items.append(("🧱 3D FEA Contour View",       "Commercial FEA-style 3D coloured contour plots (PyVista)"))
+    menu_items.append(("⬅️  Return to Main Menu",      "Go back to the main menu"))
     
     for idx, (title, description) in enumerate(menu_items, 1):
         print(colored(f"│ {idx:2d} │ {title}", 'yellow') + 
@@ -801,7 +824,8 @@ def postprocessing_menu():
     
     # Get user input with improved prompt
     print("")
-    choice = input(colored("Enter your choice [1-10] ➔ ", 'cyan', attrs=['bold']))
+    max_choice = len(menu_items)
+    choice = input(colored(f"Enter your choice [1-{max_choice}] ➔ ", 'cyan', attrs=['bold']))
     return choice
 
 
@@ -841,7 +865,7 @@ def pyvista_menu():
     choice = input(colored("Enter your choice [1-9] ➔ ", 'cyan', attrs=['bold']))
     return choice
 
-def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNITS):
+def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNITS, beam_type=None, segments=None):
     """
     Display enhanced profile information in a visually appealing format.
     
@@ -864,6 +888,44 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNI
     # Grab the divisors
     len_div = get_inverse_multiplier(units, 'length')
     inertia_div = get_inverse_multiplier(units, 'inertia')   
+
+    if beam_type == "Stepped Bar" and segments:
+        clear_screen()
+        print("\n")
+        print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
+        print(colored("║                STEPPED BAR PROFILE DETAILS                   ║", 'cyan', attrs=['bold']))
+        print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
+        print("\n")
+        
+        # Display each segment's info in a list
+        print(colored("┌─ SEGMENTS AND CROSS-SECTIONS ────────────────────────────────", 'yellow', attrs=['bold']))
+        for idx, seg in enumerate(segments, 1):
+            s_len = (seg['end'] - seg['start']) / len_div
+            s_shape = seg['shape']
+            s_I = seg['I']
+            s_A = seg['A']
+            s_c = seg['c']
+            s_b = seg['b']
+            s_E = seg['E']
+            s_mat = seg.get('material_name', 'Unknown')
+            
+            # Format numbers
+            i_str = f"{s_I / inertia_div:.6e}"
+            a_str = f"{s_A * 1e6:.2f}" if units.get('length') == 'm' else f"{s_A * 144:.2f}" # convert to mm² or in²
+            a_unit = "mm²" if units.get('length') == 'm' else "in²"
+            
+            print(colored(f"│ Segment {idx}: {s_shape} ({s_mat})", 'cyan', attrs=['bold']))
+            print(colored(f"│   Span: {seg['start']/len_div:.3f} to {seg['end']/len_div:.3f} {units['length']} (L={s_len:.3f} {units['length']})", 'white'))
+            print(colored(f"│   Area: {a_str} {a_unit}  |  Ix: {i_str} {units['inertia']}", 'white'))
+            print(colored(f"│   NA-extreme fiber (c): {s_c/len_div:.4f} {units['length']}  |  Width (b): {s_b/len_div:.4f} {units['length']}", 'white'))
+            print(colored(f"│   Elastic Modulus (E): {s_E/1e9:.1f} GPa  |  Section Modulus: {(s_I/s_c if s_c > 0 else 0.0)/get_divisor(units, 'sec_mod'):.6e} {units['sec_mod']}", 'white'))
+            print(colored(f"│" + "─"*60, 'yellow'))
+        
+        print(colored("└" + "─"*62, 'yellow', attrs=['bold']))
+        print("\n")
+        input(colored("Press Enter to return to the Profile Definition menu...", 'cyan', attrs=['bold']))
+        return
+
     # Create decorative header
     print("\n")
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
@@ -953,7 +1015,7 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNI
     print(colored("┌─ CALCULATED PARAMETERS "+"─"*38, 'blue', attrs=['bold']))
     
     # Calculate section modulus
-    section_modulus = Ix / c
+    section_modulus = Ix / c if c > 0 else 0.0
     if section_modulus < 0.001 or section_modulus > 10000:
         sm_str = f"{section_modulus:.6e}"
     else:
@@ -1291,9 +1353,14 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     ui_field("Integration scheme", "Numerical (double integration of M/EI)", 'blue', 'blue')
     ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
     ui_field("Span length  L", f"{beam_length / len_div:.3f} {units['length']}", 'blue', 'blue')
-    ui_field("Elastic modulus  E", f"{elastic_modulus/1e9:.1f} {units['modulus']}", 'blue', 'blue')
-    ui_field("Moment of inertia  I", f"{Ix:.4e} {units['inertia']}", 'blue', 'blue')
-    ui_field("Flexural rigidity  EI", f"{elastic_modulus*Ix:.3e} N\u00b7m\u00b2", 'blue', 'blue')
+    if beam_type == "Stepped Bar":
+        ui_field("Elastic modulus  E", "Varies along length", 'blue', 'blue')
+        ui_field("Moment of inertia  I", "Varies along length", 'blue', 'blue')
+        ui_field("Flexural rigidity  EI", "Varies along length", 'blue', 'blue')
+    else:
+        ui_field("Elastic modulus  E", f"{elastic_modulus/1e9:.1f} {units['modulus']}", 'blue', 'blue')
+        ui_field("Moment of inertia  I", f"{Ix:.4e} {units['inertia']}", 'blue', 'blue')
+        ui_field("Flexural rigidity  EI", f"{elastic_modulus*Ix:.3e} N\u00b7m\u00b2", 'blue', 'blue')
     ui_blank('blue')
     ui_close('blue')
 
@@ -1368,7 +1435,7 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
 def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
                           y_array, Total_ShearForce, Total_BendingMoment,
                           Shear_stress, Max_Shear_stress, bending_stress,
-                          Max_bending_stress, FOS, units=METRIC_UNITS):
+                          Max_bending_stress, FOS, units=METRIC_UNITS, segments=None):
     """Commercial-grade strength limit-state report: bending, shear, von Mises
     combined stress, demand/capacity bars and factor-of-safety verdict."""
     clear_screen()
@@ -1401,11 +1468,18 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     ui_open("ANALYSIS PARAMETERS", 'blue')
     ui_blank('blue')
     ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
-    ui_field("Cross-section", f"{shape}", 'blue', 'blue')
-    ui_field("Material", f"{selected_material.get('Material', 'Unknown')}", 'blue', 'blue')
-    ui_field("Yield strength  Fy", f"{yield_strength / stress_div:.2f} {units['stress']}", 'blue', 'blue')
-    ui_field("Section modulus  S", f"{section_modulus / sec_mod_div:.4e} {units['sec_mod']}", 'blue', 'blue')
-    ui_field("Moment of inertia  I", f"{Ix / inertia_div:.4e} {units['inertia']}", 'blue', 'blue')
+    if beam_type == "Stepped Bar" and segments:
+        ui_field("Cross-section", "Varies along length", 'blue', 'blue')
+        ui_field("Material", "Varies along length", 'blue', 'blue')
+        ui_field("Yield strength  Fy", "Varies along length", 'blue', 'blue')
+        ui_field("Section modulus  S", "Varies along length", 'blue', 'blue')
+        ui_field("Moment of inertia  I", "Varies along length", 'blue', 'blue')
+    else:
+        ui_field("Cross-section", f"{shape}", 'blue', 'blue')
+        ui_field("Material", f"{selected_material.get('Material', 'Unknown')}", 'blue', 'blue')
+        ui_field("Yield strength  Fy", f"{yield_strength / stress_div:.2f} {units['stress']}", 'blue', 'blue')
+        ui_field("Section modulus  S", f"{section_modulus / sec_mod_div:.4e} {units['sec_mod']}", 'blue', 'blue')
+        ui_field("Moment of inertia  I", f"{Ix / inertia_div:.4e} {units['inertia']}", 'blue', 'blue')
     ui_blank('blue')
     ui_close('blue')
 
@@ -1485,7 +1559,7 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
 
 def display_engineering_recommendations(beam_type, shape, beam_length, selected_material,
                                       Ix, c, b, FOS=None, max_stress=None, max_defl=None,
-                                      span_ratio=None, yield_strength=None):
+                                      span_ratio=None, yield_strength=None, segments=None):
     """Commercial-grade structural design-check & recommendation report.
 
     Consolidates the strength and serviceability limit states into a single
@@ -1567,15 +1641,23 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     ui_open("MODEL & SECTION SUMMARY", 'blue')
     ui_blank('blue')
     ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
-    ui_field("Cross-section", f"{shape}", 'blue', 'blue')
-    ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
-    ui_field("Material", f"{mat_name}" + (f"  (Fy = {yield_MPa:.0f} MPa)" if yield_MPa else ""), 'blue', 'blue')
-    if Ix is not None:
-        ui_field("Moment of inertia  I", f"{Ix:.4e} m\u2074", 'blue', 'blue')
-    if section_modulus:
-        ui_field("Section modulus  S", f"{section_modulus:.4e} m\u00b3", 'blue', 'blue')
-    if depth:
-        ui_field("Section depth  (2c)", f"{depth:.4f} m", 'blue', 'blue')
+    if beam_type == "Stepped Bar" and segments:
+        ui_field("Cross-section", "Varies along length", 'blue', 'blue')
+        ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
+        ui_field("Material", "Varies along length", 'blue', 'blue')
+        ui_field("Moment of inertia  I", "Varies along length", 'blue', 'blue')
+        ui_field("Section modulus  S", "Varies along length", 'blue', 'blue')
+        ui_field("Section depth  (2c)", "Varies along length", 'blue', 'blue')
+    else:
+        ui_field("Cross-section", f"{shape}", 'blue', 'blue')
+        ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
+        ui_field("Material", f"{mat_name}" + (f"  (Fy = {yield_MPa:.0f} MPa)" if yield_MPa else ""), 'blue', 'blue')
+        if Ix is not None:
+            ui_field("Moment of inertia  I", f"{Ix:.4e} m\u2074", 'blue', 'blue')
+        if section_modulus:
+            ui_field("Section modulus  S", f"{section_modulus:.4e} m\u00b3", 'blue', 'blue')
+        if depth:
+            ui_field("Section depth  (2c)", f"{depth:.4f} m", 'blue', 'blue')
     ui_blank('blue')
     ui_close('blue')
 
