@@ -19,11 +19,6 @@ import matplotlib.pyplot as plt
 from plotly.subplots import make_subplots
 import matplotlib.gridspec as gridspec
 
-# --- PATH INJECTION ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.dirname(current_dir)
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
 from ui.Menus import get_divisor
 
 try:

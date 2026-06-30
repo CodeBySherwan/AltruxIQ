@@ -1,12 +1,6 @@
 import os
 import sys
 
-# --- PATH INJECTION ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.dirname(current_dir)
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
 import plotly.graph_objs as go
 import numpy as np
 from ui.Menus import get_divisor  # trusted unit divisor engine

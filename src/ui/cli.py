@@ -17,15 +17,12 @@ import numpy as np
 import time
 # pyrefly: ignore [missing-import]
 from termcolor import colored, cprint
-# --- PATH INJECTION (The Fix) ---
-
-# 1. Get the directory of cli.py (ui folder)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# 2. Get the parent directory (src folder)
-src_dir = os.path.dirname(current_dir)
-# 3. Add the src folder to Python's search path if it's not already there
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
+# --- PATH SETUP (entry-point only) ---
+_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+from common.paths import ensure_src_in_path
+ensure_src_in_path()
 
     
 # Application modules
@@ -78,15 +75,10 @@ class NumpyEncoder(json.JSONEncoder):
 # Global Storage Variables
 # -----------------------------
 current_unit_system = "Metric"
-# Define our label dictionaries to pass to the menus
-METRIC_LABELS = {
-    'length': 'm', 'length_small': 'mm', 'force': 'N', 'moment': 'N·m',
-    'inertia': 'm⁴', 'sec_mod': 'm³', 'modulus': 'GPa', 'density': 'kg/m³', 'stress': 'MPa'
-}
-IMPERIAL_LABELS = {
-    'length': 'ft', 'length_small': 'in', 'force': 'lbf', 'moment': 'lbf·ft',
-    'inertia': 'in⁴', 'sec_mod': 'in³', 'modulus': 'ksi', 'density': 'lb/ft³', 'stress': 'ksi'
-}
+# Unit label dictionaries — canonical definitions live in `common.units`.
+# Aliased here as METRIC_LABELS / IMPERIAL_LABELS so existing references
+# (`current_labels = METRIC_LABELS`, kwargs `units=current_labels`, etc.) keep working.
+from common.units import METRIC_UNITS as METRIC_LABELS, IMPERIAL_UNITS as IMPERIAL_LABELS
 current_labels = METRIC_LABELS  # <-- Tracks active dictionary
 beam_storage = []      # List to hold all saved projects
 current_project = None # Dictionary holding the currently loaded project

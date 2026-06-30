@@ -230,59 +230,34 @@ def ui_menu_stage(stage_label, color='cyan'):
 # =============================
 # Global Unit Configurations
 # =============================
-METRIC_UNITS = {
-    'length': 'm',
-    'length_small': 'mm',
-    'force': 'N',
-    'moment': 'N·m',
-    'inertia': 'm⁴',
-    'sec_mod': 'm³',
-    'modulus': 'GPa',
-    'density': 'kg/m³',
-    'stress': 'MPa'
-}
+# Unit handling is centralized in `common.units` (single source of truth).
+# Re-exported here for backward compatibility with the many call sites and
+# external modules that still do `from ui.Menus import get_divisor`.
+from common.units import (
+    METRIC_UNITS,
+    IMPERIAL_UNITS,
+    UNIT_SYSTEMS,
+    DEFAULT_UNITS,
+    get_divisor,
+    from_si,
+    to_si,
+    system_multiplier,
+    get_scale,
+    default_units,
+    is_imperial,
+)
 
-IMPERIAL_UNITS = {
-    'length': 'ft',
-    'length_small': 'in',
-    'force': 'lbf',
-    'moment': 'lbf·ft',
-    'inertia': 'in⁴',
-    'sec_mod': 'in³',
-    'modulus': 'ksi',
-    'density': 'lb/ft³',
-    'stress': 'ksi'
-}
 # =============================
 # Utility & Helper Functions
 # =============================
-def get_divisor(units_dict, quantity):
-    """Returns the divisor to convert base SI (m, N, Pa, kg) to the target display unit."""
-    is_imperial = units_dict.get('length') == 'ft'
-    
-    if quantity == 'length': return 0.3048 if is_imperial else 1.0
-    if quantity == 'length_small': return 0.0254 if is_imperial else 0.001  # m -> in OR m -> mm
-    if quantity == 'force': return 4.4482216 if is_imperial else 1.0
-    if quantity == 'moment': return 1.3558179 if is_imperial else 1.0
-    if quantity == 'inertia': return (0.0254)**4 if is_imperial else 1.0
-    if quantity == 'sec_mod': return (0.0254)**3 if is_imperial else 1.0
-    if quantity == 'modulus': return 6894757.29 if is_imperial else 1e9     # Pa -> ksi OR Pa -> GPa
-    if quantity == 'stress': return 6894757.29 if is_imperial else 1e6      # Pa -> ksi OR Pa -> MPa
-    if quantity == 'density': return 16.01846 if is_imperial else 1.0       # kg/m³ -> lb/ft³ OR keep kg/m³
-    
-    return 1.0
 def get_inverse_multiplier(units_dict, quantity):
-    """Returns the divisor needed to convert SI back to the current unit system."""
-    # If the current label for length is 'ft', we know we are in Imperial
-    if units_dict.get('length') == 'ft':
-        multipliers = {
-            'length': 0.3048, 
-            'force': 4.4482216, 
-            'moment': 1.3558179,
-            'inertia': (0.0254)**4  # Example: m^4 to ft^4
-        }
-        return multipliers.get(quantity, 1.0)
-    return 1.0 # Metric is already 1.0
+    """DEPRECATED: thin compatibility shim over :func:`common.units.get_divisor`.
+
+    Historically this returned the SI->display divisor for only 4 quantities
+    (and 1.0 for everything else, including imperial sec_mod/stress). All real
+    callers have been migrated to ``get_divisor``; new code should not use this.
+    """
+    return get_divisor(units_dict, quantity)
 
 def clear_screen():
     """Clear the terminal screen."""
@@ -885,9 +860,9 @@ def display_profile_info(beam_length, shape, Ix, c, b, y_array, units=METRIC_UNI
         Array of y-coordinates for stress calculations
     """
     clear_screen()
-    # Grab the divisors
-    len_div = get_inverse_multiplier(units, 'length')
-    inertia_div = get_inverse_multiplier(units, 'inertia')   
+    # Grab the divisors (single source: common.units.get_divisor)
+    len_div = get_divisor(units, 'length')
+    inertia_div = get_divisor(units, 'inertia')
 
     if beam_type == "Stepped Bar" and segments:
         clear_screen()

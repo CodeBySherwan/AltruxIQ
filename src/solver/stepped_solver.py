@@ -58,12 +58,6 @@ from scipy.linalg import solve, LinAlgError as _SciLinAlgError
 import os
 import sys
 
-# --- PATH INJECTION ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.dirname(current_dir)
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
 from solver.area_solver import area_from_section
 
 

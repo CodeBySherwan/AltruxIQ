@@ -4,30 +4,11 @@ from termcolor import colored
 import time
 import numpy as np
 # =============================
-# Unit Conversion Multipliers
+# Unit Conversion — single source in `common.units`
 # =============================
-CONVERSION_TO_SI = {
-    "Metric": {
-        "length": 1.0,
-        "force": 1.0,
-        "moment": 1.0,
-        "distributed": 1.0
-    },
-    "Imperial": {
-        "length": 0.3048,           # ft to m
-        "force": 4.4482216,         # lbf to N
-        "moment": 1.3558179,        # lbf·ft to N·m
-        "distributed": 14.5939      # lbf/ft to N/m
-    }
-}
-# --- PATH INJECTION (The Fix) ---
-# 1. Get the directory of cli.py (ui folder)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# 2. Get the parent directory (src folder)
-src_dir = os.path.dirname(current_dir)
-# 3. Add the src folder to Python's search path if it's not already there
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
+# `system_multiplier(system, qty)` is the drop-in replacement for the legacy
+# CONVERSION_TO_SI[system][qty] lookup that used to live here.
+from common.units import system_multiplier, default_units, UNIT_SYSTEMS
 
 from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
                      ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head)
@@ -229,8 +210,8 @@ def Beam_Classification():
 
 def Beam_Length(unit_system="Metric", units=None):
     """Prompt the user to enter the beam length."""
-    if units is None: units = {'length': 'm'}
-    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    if units is None: units = default_units()
+    multiplier = system_multiplier(unit_system, "length")
     beam_length_raw = ask_float("Enter beam length", unit=units['length'],
                                 minimum=0, exclusive_min=True)
     print("")
@@ -239,8 +220,8 @@ def Beam_Length(unit_system="Metric", units=None):
 #==============================
 def Beam_Supports(unit_system="Metric", units=None):
     """Prompt the user to define the beam supports."""
-    if units is None: units = {'length': 'm'}
-    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    if units is None: units = default_units()
+    multiplier = system_multiplier(unit_system, "length")
     A_raw = ask_float("Enter position of Pin Support A", unit=units['length'], minimum=0)
     A = A_raw * multiplier
     A_restraint = (1, 1, 0)
@@ -265,8 +246,8 @@ def define_continuous_supports(beam_length, unit_system="Metric", units=None):
     Prompt the user to enter multiple support coordinates for a continuous beam.
     Returns a list of dicts: [{"pos": float, "dof": (0,1,0), "ky": None, "kx": None}, ...]
     """
-    if units is None: units = {'length': 'm'}
-    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    if units is None: units = default_units()
+    multiplier = system_multiplier(unit_system, "length")
     inv_multiplier = 1.0 / multiplier
     
     while True:
@@ -325,8 +306,8 @@ def define_continuous_supports(beam_length, unit_system="Metric", units=None):
 #=====================================================================================
 def define_custom_supports(beam_length, unit_system="Metric", units=None):
     """Interactive wizard for defining arbitrary support configurations."""
-    if units is None: units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
-    multiplier = CONVERSION_TO_SI[unit_system]["length"]
+    if units is None: units = default_units()
+    multiplier = system_multiplier(unit_system, "length")
     inv_multiplier = 1.0 / multiplier
     
     while True:
@@ -386,12 +367,12 @@ def define_custom_supports(beam_length, unit_system="Metric", units=None):
                     elif s_type == '4':
                         dof = (0, 1, 0)
                         ky_raw = float(input(colored(f"Enter vertical spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
-                        ky = ky_raw * (CONVERSION_TO_SI[unit_system]["force"] / multiplier)
+                        ky = ky_raw * (system_multiplier(unit_system, "force") / multiplier)
                         has_y_restraint = True
                     elif s_type == '5':
                         dof = (1, 0, 0)
                         kx_raw = float(input(colored(f"Enter horizontal spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
-                        kx = kx_raw * (CONVERSION_TO_SI[unit_system]["force"] / multiplier)
+                        kx = kx_raw * (system_multiplier(unit_system, "force") / multiplier)
                         has_x_restraint = True
                     else:
                         print_error("Invalid choice.")
@@ -420,15 +401,15 @@ def define_custom_supports(beam_length, unit_system="Metric", units=None):
 #==================================================================================
 def manage_loads(unit_system="Metric", units=None, beam_type=None):
     if units is None:
-        units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
+        units = default_units()
     
     dist_unit = f"{units['force']}/{units['length']}"
     
     # Grab multipliers for conversion to SI before saving
-    l_mult = CONVERSION_TO_SI[unit_system]["length"]
-    f_mult = CONVERSION_TO_SI[unit_system]["force"]
-    m_mult = CONVERSION_TO_SI[unit_system]["moment"]
-    d_mult = CONVERSION_TO_SI[unit_system]["distributed"]
+    l_mult = system_multiplier(unit_system, "length")
+    f_mult = system_multiplier(unit_system, "force")
+    m_mult = system_multiplier(unit_system, "moment")
+    d_mult = system_multiplier(unit_system, "distributed")
 
     loads = {
         "pointloads": [], "distributedloads": [], "momentloads": [], "triangleloads": []
@@ -809,7 +790,7 @@ def get_solver_resolution():
 #--------------------------------------------------------------------------------------
 def define_custom_material(unit_system="Metric", units=None):
     """Interactive wizard to create a custom material entry."""
-    if units is None: units = {'density': 'kg/m³', 'stress': 'MPa', 'modulus': 'GPa'}
+    if units is None: units = default_units()
     clear_screen()
     print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
     print(colored("║               DEFINE CUSTOM MATERIAL                         ║", 'cyan', attrs=['bold']))
@@ -882,11 +863,11 @@ def define_stepped_segments(unit_system="Metric", units=None):
         ]
     """
     import numpy as np
-    
+
     if units is None:
-        units = {'length': 'm', 'force': 'N', 'moment': 'N·m'}
+        units = default_units()
     
-    l_mult = CONVERSION_TO_SI[unit_system]["length"]
+    l_mult = system_multiplier(unit_system, "length")
     inv_len = 1.0 / l_mult
     
     # Import needed modules (path injection is already done at top of inputs.py)

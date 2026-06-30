@@ -31,13 +31,6 @@ import sys
 import datetime
 import webbrowser
 
-# --- PATH INJECTION (so this module works from flat or package imports) ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.dirname(current_dir)
-project_root = os.path.dirname(src_dir)
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
 import plotly.io as pio
 
 from ui.Menus import print_success, print_error

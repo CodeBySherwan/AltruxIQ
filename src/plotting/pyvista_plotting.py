@@ -22,14 +22,6 @@ try:
 except ImportError:
     raise ImportError("PyVista is not installed. Run: pip install pyvista")
 
-# ---------------------------------------------------------------------------
-# PATH INJECTION
-# ---------------------------------------------------------------------------
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir     = os.path.dirname(current_dir)
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
 from ui.Menus import get_divisor, print_success, print_error
 from ui.inputs import ask_choice, ask_yes_no
 from termcolor import colored
