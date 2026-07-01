@@ -1871,7 +1871,11 @@ def run_extended_menu():
         elif selection == '9':  # Postprocessing/Visualization
             while True:
                 sub_choice = postprocessing_menu(beam_type)
-                # Back choice depends on menu size (10 base + 3 stepped extras if applicable)
+                # Menu size depends on beam_type: items 1-8 are always present,
+                # items 9/10/11 (axial) exist only for Stepped Bar, then 3D FEA
+                # and Back are appended. So their numbers shift by 3 for Stepped.
+                # Bug-11 fix: compute these dynamically instead of hardcoding '12'.
+                fea_3d_choice = '12' if beam_type == "Stepped Bar" else '9'
                 back_choice = '13' if beam_type == "Stepped Bar" else '10'
                 if sub_choice == back_choice:  # Back to main menu
                     break
@@ -2021,11 +2025,7 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '9':  # Axial-Force Plot (Stepped Bar only)
-                    if beam_type != "Stepped Bar":
-                        print_error("Axial analysis is only available for Stepped Bars.")
-                        time.sleep(2)
-                        continue
+                elif sub_choice == '9' and beam_type == "Stepped Bar":  # Axial-Force Plot (Stepped Bar only)
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
@@ -2043,11 +2043,7 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '10':  # Axial-Displacement Plot (Stepped Bar only)
-                    if beam_type != "Stepped Bar":
-                        print_error("Axial analysis is only available for Stepped Bars.")
-                        time.sleep(2)
-                        continue
+                elif sub_choice == '10' and beam_type == "Stepped Bar":  # Axial-Displacement Plot (Stepped Bar only)
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
@@ -2065,11 +2061,7 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '11':  # Combined Stress (Stepped Bar only)
-                    if beam_type != "Stepped Bar":
-                        print_error("Combined stress analysis is only available for Stepped Bars.")
-                        time.sleep(2)
-                        continue
+                elif sub_choice == '11' and beam_type == "Stepped Bar":  # Combined Stress (Stepped Bar only)
                     try:
                         # Compute combined stress: sigma_bending + sigma_axial
                         # For each segment, find max axial stress and combine with bending
@@ -2112,7 +2104,7 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
 
-                elif sub_choice == '12':  # 3D FEA Contour View (PyVista)
+                elif sub_choice == fea_3d_choice:  # 3D FEA Contour View (PyVista)
                     if not _PYVISTA_AVAILABLE:
                         print_error(f"PyVista is not available: {_pv_import_error}")
                         print_error("Run:  pip install pyvista")
