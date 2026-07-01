@@ -2098,7 +2098,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Combined Stress Plot (Matplotlib):")
-                            Matplot_BendingStress(X_Field, combined_stress, beam_length, units=current_labels)
+                            # Bug-16 fix: Matplot_BendingStress signature is
+                            # (X_Field, BendingStress, units=None) — no beam_length.
+                            # Passing it positionally collided with units= kwarg.
+                            Matplot_BendingStress(X_Field, combined_stress, units=current_labels)
                         elif style == '2':
                             print_success("Processing Combined Stress Plot (Plotly):")
                             Plotly_BendingStress(X_Field, combined_stress, beam_length, units=current_labels)
