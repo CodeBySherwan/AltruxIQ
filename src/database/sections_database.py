@@ -1,17 +1,18 @@
 import json
-from pathlib import Path
 from datetime import datetime
+
+from common.paths import STANDARD_SECTIONS_FILE, CUSTOM_SECTIONS_FILE
+
 
 class SectionsDatabase:
     def __init__(self):
-        # Safely resolve paths relative to this file's location
-        project_root = Path(__file__).resolve().parent.parent.parent
-        self.standard_path = project_root / "data" / "standard_sections.json"
-        self.custom_path = project_root / "data" / "custom_sections.json"
-        
+        # Centralized via common.paths — no more __file__ arithmetic here.
+        self.standard_path = STANDARD_SECTIONS_FILE
+        self.custom_path = CUSTOM_SECTIONS_FILE
+
         self.standard_sections = {}
         self.custom_sections = []
-        
+
         self._load_standard()
         self._load_custom()
 

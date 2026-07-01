@@ -25,6 +25,7 @@ except ImportError:
 from ui.Menus import  print_success, print_error
 
 from common.units import default_units,get_divisor  # canonical default units dict
+from common.paths import SCREENSHOTS_DIR, EXPORTS_DIR
 from ui.inputs import ask_choice, ask_yes_no
 from termcolor import colored
 
@@ -51,8 +52,9 @@ _SLIDER_EVENT_TYPE = "always"    # Real-time slider updates (DEF-09 fix)
 _DEFAULT_FPS       = 24          # Animation playback speed
 _DEFAULT_N_FRAMES  = 60          # Animation frame count
 
-_SCREENSHOT_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "screenshots")
-_EXPORT_DIR        = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "exports")
+# Centralized via common.paths (single source of truth for on-disk locations).
+_SCREENSHOT_DIR    = str(SCREENSHOTS_DIR)
+_EXPORT_DIR        = str(EXPORTS_DIR)
 
 COLOR_MAX        = "red"
 COLOR_MIN        = "blue"

@@ -2,28 +2,20 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from common.paths import DATA_DIR, CUSTOM_MATERIALS_FILE
+
+
 class MaterialDatabase:
-    def __init__(self, filename="materials.Json"):
-        # 1. Get the absolute path of THIS script (.../src/database/materials_database.py)
-        current_script_path = Path(__file__).resolve()
-        
-        # 2. Navigate up the directory tree to the project root
-        # .parent goes up one level. 
-        # current_script_path.parent == .../src/database
-        # current_script_path.parent.parent == .../src
-        # current_script_path.parent.parent.parent == project_root
-        project_root = current_script_path.parent.parent.parent
-        
-        # 3. Construct the absolute path to the data file
-        # pathlib uses the '/' operator to elegantly join paths
-        self.db_path = project_root / 'data' / filename
-        
-        # 4. Open the file using the robust absolute path
+    def __init__(self, filename="materials.json"):
+        # Centralized via common.paths — no more __file__ arithmetic here.
+        # The filename is accepted for backward compatibility with the
+        # existing load_material_database(filename) call sites.
+        self.db_path = DATA_DIR / filename
+
         try:
             with open(self.db_path, 'r') as file:
                 self.materials = json.load(file)
         except FileNotFoundError:
-            # Provide a helpful error message for debugging
             print(f"CRITICAL ERROR: Could not find database at {self.db_path}")
             raise
         self._load_custom_materials()
@@ -52,7 +44,7 @@ class MaterialDatabase:
 # --- NEW METHODS BELOW ---
 
     def _load_custom_materials(self):
-        self.custom_path = self.db_path.parent / "custom_materials.json"
+        self.custom_path = CUSTOM_MATERIALS_FILE
         try:
             with open(self.custom_path, 'r') as f:
                 self.custom_materials = json.load(f)

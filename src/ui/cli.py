@@ -21,7 +21,7 @@ from termcolor import colored, cprint
 _src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _src not in sys.path:
     sys.path.insert(0, _src)
-from common.paths import ensure_src_in_path
+from common.paths import ensure_src_in_path, PROJECTS_FILE
 ensure_src_in_path()
 
     
@@ -493,7 +493,7 @@ def delete_project():
         if confirmation.lower() == 'y':
             del beam_storage[selection - 1]
             try:
-                with open('beam_projects.json', 'w') as file:
+                with open(PROJECTS_FILE, 'w') as file:
                     json.dump(beam_storage, file, cls=NumpyEncoder, indent=4)
                 print_success(f"Project '{project_to_delete['name']}' deleted successfully!")
             except Exception as e:
@@ -600,9 +600,9 @@ def save_project():
 # =============================
 def save_projects_to_disk():
     try:
-        with open('beam_projects.json', 'w') as file:
+        with open(PROJECTS_FILE, 'w') as file:
             json.dump(beam_storage, file, cls=NumpyEncoder, indent=4)
-            
+
         print_success("Project saved to disk successfully!") # Only prints if dump succeeds
         
     except Exception as e:
@@ -617,7 +617,7 @@ def load_projects_from_disk():
     """
     global beam_storage
     try:
-        with open('beam_projects.json', 'r') as file:
+        with open(PROJECTS_FILE, 'r') as file:
             beam_storage = json.load(file)
         print_success("Projects loaded from disk successfully!")
     except FileNotFoundError:
@@ -632,12 +632,16 @@ def load_projects_from_disk():
 # =============================
 def load_material_database():
     """
-    Load the material database from 'Materials.json' into the global variable.
+    Load the material database into the global variable.
+
+    No filename argument is needed — MaterialDatabase resolves the path from
+    common.paths (MATERIALS_DB_FILE). The old "Materials.json" string relied on
+    Windows being case-insensitive (the file is actually "materials.json");
+    the centralized default is correct on every platform.
     """
     global Materials
-    json_filename = "Materials.json"
     try:
-        Materials = MaterialDatabase(json_filename)
+        Materials = MaterialDatabase()
     except Exception as e:
         print_error(f"Error loading the materials database: {e}")
         time.sleep(3)

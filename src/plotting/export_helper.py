@@ -33,6 +33,7 @@ import webbrowser
 
 import plotly.io as pio
 
+from common.paths import DIAGRAM_EXPORT_DIR
 from ui.Menus import print_success, print_error
 from ui.inputs import ask_yes_no, ask_choice
 from termcolor import colored
@@ -43,19 +44,14 @@ except Exception:                       # pragma: no cover (flat import for prev
     import plot_theme as T
 
 
-# project root = two levels up from this file (src/plotting/export_helper.py)
-# Same pattern as pyvista_plotting.py; consolidated into common.paths in Phase 2.
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-EXPORT_SUBDIR = os.path.join("exports", "diagrams")
 # Built-in PNG export resolution (matches the modebar camera button settings).
 _PNG_W, _PNG_H, _PNG_SCALE = 1100, 650, 3
 
 
 def _export_dir():
     """Return (and lazily create) the diagrams export directory."""
-    out = os.path.join(_PROJECT_ROOT, EXPORT_SUBDIR)
-    os.makedirs(out, exist_ok=True)
-    return out
+    DIAGRAM_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    return str(DIAGRAM_EXPORT_DIR)
 
 
 def _safe_name(name):
