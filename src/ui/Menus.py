@@ -246,6 +246,7 @@ from common.units import (
     default_units,
     is_imperial,
 )
+from common.config import SERVICEABILITY
 
 # =============================
 # Utility & Helper Functions
@@ -1360,9 +1361,9 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     ui_open("SERVICEABILITY LIMIT-STATE CHECKS  (demand / capacity)", 'magenta')
     ui_blank('magenta')
     criteria = [
-        ("L/240  (roof, no ceiling)", 240.0),
-        ("L/360  (general / floors)", 360.0),
-        ("L/480  (brittle finishes)", 480.0),
+        ("L/240  (roof, no ceiling)", SERVICEABILITY.ROOF_NO_CEILING),
+        ("L/360  (general / floors)", SERVICEABILITY.GENERAL_FLOOR),
+        ("L/480  (brittle finishes)", SERVICEABILITY.BRITTLE_FINISHES),
     ]
     for label, denom in criteria:
         allow = beam_length / denom
@@ -1385,11 +1386,11 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     ui_close('blue')
 
     # ---- Engineering interpretation -------------------------------------
-    if span_ratio < 1/500:
+    if span_ratio < 1/SERVICEABILITY.VERY_STIFF_TIER:
         verdict = "Very stiff \u2014 suitable for precision / vibration-sensitive use."
-    elif span_ratio < 1/360:
+    elif span_ratio < 1/SERVICEABILITY.GENERAL_FLOOR:
         verdict = "Stiff \u2014 satisfies general building serviceability (L/360)."
-    elif span_ratio < 1/240:
+    elif span_ratio < 1/SERVICEABILITY.ROOF_NO_CEILING:
         verdict = "Moderate \u2014 acceptable for roofs / non-brittle elements only."
     else:
         verdict = "Flexible \u2014 likely exceeds code limits; stiffening advised."
@@ -1398,9 +1399,9 @@ def display_deflection_analysis(beam_length, shape, beam_type, elastic_modulus, 
     ui_open("ENGINEERING INTERPRETATION", 'yellow')
     ui_blank('yellow')
     ui_field("Serviceability verdict", verdict, 'yellow', 'yellow', width=22)
-    if beam_type == "Cantilever" and span_ratio > 1/180:
+    if beam_type == "Cantilever" and span_ratio > 1/SERVICEABILITY.CANTILEVER_LIMIT:
         ui_bullet("Cantilever exceeds L/180 \u2014 increase section depth / inertia.", 'yellow', 'yellow')
-    elif beam_type == "Simple" and span_ratio > 1/360:
+    elif beam_type == "Simple" and span_ratio > 1/SERVICEABILITY.GENERAL_FLOOR:
         ui_bullet("Span exceeds L/360 \u2014 increase I or add intermediate support.", 'yellow', 'yellow')
     ui_blank('yellow')
     ui_close('yellow')
@@ -1491,7 +1492,7 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     # ---- Factor of safety ------------------------------------------------
     if FOS >= 2.0:
         s_status, s_col, s_msg = "EXCELLENT \u2713", 'green', "High margin of safety."
-    elif FOS >= 1.5:
+    elif FOS >= SERVICEABILITY.TARGET_FACTOR_OF_SAFETY:
         s_status, s_col, s_msg = "GOOD \u2713", 'green', "Meets standard structural requirements."
     elif FOS >= 1.0:
         s_status, s_col, s_msg = "MARGINAL \u26a0", 'yellow', "Safe but limited reserve \u2014 review loads."
@@ -1521,7 +1522,7 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
     ui_head("Action:", 'yellow', 'yellow')
     if FOS < 1.0:
         ui_bullet("CRITICAL \u2014 increase section size or upgrade material.", 'yellow', 'yellow', mark="\u2717")
-    elif FOS < 1.5:
+    elif FOS < SERVICEABILITY.TARGET_FACTOR_OF_SAFETY:
         ui_bullet("Improve section if member is critical; verify load model.", 'yellow', 'yellow', mark="\u26a0")
     elif FOS > 2.5:
         ui_bullet("Over-designed \u2014 consider lighter section to save weight/cost.", 'yellow', 'yellow', mark="\u2193")
@@ -1550,8 +1551,8 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     # ------------------------------------------------------------------ #
     #  DERIVED ENGINEERING QUANTITIES
     # ------------------------------------------------------------------ #
-    TARGET_FOS = 1.50          # target strength reserve
-    DEFL_LIMIT_DENOM = 360.0   # governing serviceability criterion (L/360)
+    TARGET_FOS = SERVICEABILITY.TARGET_FACTOR_OF_SAFETY  # target strength reserve
+    DEFL_LIMIT_DENOM = SERVICEABILITY.GENERAL_FLOOR      # governing criterion (L/360)
 
     section_modulus = (Ix / c) if c else 0.0
     depth = 2.0 * c if c else 0.0
@@ -1670,9 +1671,9 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
         else:
             strengths.append(f"Adequate strength reserve (FoS = {FOS:.2f})")
     if span_ratio is not None and inv_span:
-        if span_ratio > 1/180:
+        if span_ratio > 1/SERVICEABILITY.CANTILEVER_LIMIT:
             concerns.append(f"Excessive deflection (L/{inv_span:.0f}) \u2014 serviceability at risk")
-        elif span_ratio > 1/360:
+        elif span_ratio > 1/SERVICEABILITY.GENERAL_FLOOR:
             concerns.append(f"Deflection L/{inv_span:.0f} exceeds the L/360 floor criterion")
         else:
             strengths.append(f"Deflection within limits (L/{inv_span:.0f})")
@@ -1748,7 +1749,7 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
             p2.append("Or add an intermediate support to roughly quarter the deflection")
         elif beam_type == "Cantilever":
             p2.append("Or shorten the cantilever / add a back-span prop")
-    elif span_ratio is not None and span_ratio > 1/480:
+    elif span_ratio is not None and span_ratio > 1/SERVICEABILITY.BRITTLE_FINISHES:
         p2.append("Deflection acceptable for general use; verify L/480 if brittle finishes apply")
 
     # ---- P3: optimisation --------------------------------------------

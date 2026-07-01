@@ -22,6 +22,7 @@ _src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _src not in sys.path:
     sys.path.insert(0, _src)
 from common.paths import ensure_src_in_path, PROJECTS_FILE
+from common.config import SOLVER
 ensure_src_in_path()
 
     
@@ -109,7 +110,7 @@ y_array = np.array([])
 section_dims = {}
 support_types = ("pin", "roller")  # BUG-10 FIX: module-level default; overwritten on load/save
 beam_type = None  # BUG-05 FIX: initialise at module level to prevent NameError
-num_points = 2001
+num_points = SOLVER.DEFAULT_NUM_POINTS
 supports_list = []  # NEW: Used for Continuous multi-span beams
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
 Deflection = None
@@ -143,7 +144,7 @@ def New_Project():
     current_project = None  # Reset current project data
     beam_type = None        # BUG-05 FIX: reset beam_type so menu guards work correctly
     support_types = ("pin", "roller")  # BUG-10 FIX: reset to safe default
-    num_points = 2001
+    num_points = SOLVER.DEFAULT_NUM_POINTS
     segments = []
     AxialForce = None
     AxialDisplacement = None
@@ -280,7 +281,7 @@ def load_project():
             support_types = ("fixed",)
         else:
             support_types = ("pin", "roller")
-        num_points = current_project.get('num_points', 2001)
+        num_points = current_project.get('num_points', SOLVER.DEFAULT_NUM_POINTS)
 
         # Load analysis data
         X_Field = np.array(current_project.get('X_Field', []))
@@ -896,7 +897,7 @@ def run_extended_menu():
     global Deflection, Slopes, Curvatures, Reactions
     global Shear_stress, bending_stress, FOS
     global segments, AxialForce, AxialDisplacement
-    num_points = 2001
+    num_points = SOLVER.DEFAULT_NUM_POINTS
     load_material_database()
     load_projects_from_disk()
     
@@ -2416,7 +2417,7 @@ def run_extended_menu():
                     time.sleep(1.5)
                     break
                 elif res_choice == '3':
-                    num_points = 2001
+                    num_points = SOLVER.DEFAULT_NUM_POINTS  # "High" tier
                     print_success("Resolution set to High (2001 points).")
                     time.sleep(1.5)
                     break
@@ -2448,7 +2449,7 @@ def init():
     global project_state, current_unit_system, current_labels
     current_unit_system = "Metric"
     current_labels = METRIC_LABELS
-    num_points = 2001
+    num_points = SOLVER.DEFAULT_NUM_POINTS
     project_state = {
         "is_loaded": False,
         "profile_saved": False, 

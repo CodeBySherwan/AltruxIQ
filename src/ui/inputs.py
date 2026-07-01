@@ -9,6 +9,7 @@ import numpy as np
 # `system_multiplier(system, qty)` is the drop-in replacement for the legacy
 # CONVERSION_TO_SI[system][qty] lookup that used to live here.
 from common.units import system_multiplier, default_units, UNIT_SYSTEMS
+from common.config import SOLVER
 
 from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
                      ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head)
@@ -784,8 +785,9 @@ def get_solver_resolution():
     """
     Prompt the user to enter a custom solver resolution between 201 and 10001.
     """
-    return ask_int("Enter custom solver resolution", minimum=201, maximum=10001,
-                   default=2001, allow_cancel=True)
+    return ask_int("Enter custom solver resolution",
+                   minimum=SOLVER.MIN_NUM_POINTS, maximum=SOLVER.MAX_NUM_POINTS,
+                   default=SOLVER.DEFAULT_NUM_POINTS, allow_cancel=True)
 #--------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------
 def define_custom_material(unit_system="Metric", units=None):

@@ -59,6 +59,7 @@ import os
 import sys
 
 from solver.area_solver import area_from_section
+from common.config import SOLVER
 
 
 # =============================================================================
@@ -176,7 +177,7 @@ def _build_mesh(
     # load span into multiple elements allows the piecewise-cubic Hermite
     # interpolation to converge, and the per-element linear M / constant V
     # recovery to become accurate.
-    MIN_LOAD_ELEMS = 100  # minimum sub-elements per load span
+    MIN_LOAD_ELEMS = SOLVER.MIN_LOAD_SUBDIVISIONS  # minimum sub-elements per load span
 
     for load in (distributedloads or []):
         a = float(load[0])
@@ -573,7 +574,7 @@ def solve_stepped_beam(
     distributedloads=None,
     momentloads=None,
     triangleloads=None,
-    num_points: int = 2001,
+    num_points: int = SOLVER.DEFAULT_NUM_POINTS,
 ) -> dict:
     """
     Unified execution engine for stepped beam analysis via 2D frame FEM.
@@ -615,7 +616,7 @@ def solve_stepped_beam(
         Linearly varying load: intensity ``peak`` at ``start``,
         intensity ``low`` at ``end``.  Both positive = upward.
 
-    num_points : int, default 2001
+    num_points : int, default SOLVER.DEFAULT_NUM_POINTS (2001)
         Resolution of the output evaluation arrays.
 
     Returns

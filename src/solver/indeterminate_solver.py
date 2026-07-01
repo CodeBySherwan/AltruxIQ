@@ -12,14 +12,16 @@ Handles internal conversion of coordinate systems and load sign conventions.
 
 import numpy as np
 from indeterminatebeam import (
-    Beam, 
+    Beam,
     Support,
-    PointLoadV, 
+    PointLoadV,
     PointLoad,
-    UDLV, 
+    UDLV,
     TrapezoidalLoadV,
     PointTorque,
 )
+
+from common.config import SOLVER
 
 
 def _build_supports(beam_type: str, beam_length: float, supports: list) -> list:
@@ -127,9 +129,9 @@ def solve_beam(
     distributedloads=None,
     momentloads=None,
     triangleloads=None,
-    E: float = 210e9,
-    I: float = 8.33e-6,
-    num_points: int = 2001,
+    E: float = SOLVER.FALLBACK_STEEL_E_PA,
+    I: float = SOLVER.FALLBACK_STEEL_I_M4,
+    num_points: int = SOLVER.DEFAULT_NUM_POINTS,
 ) -> dict:
     """
     Unified execution engine for beam analysis utilizing the stiffness method backend.
@@ -145,11 +147,11 @@ def solve_beam(
         Format: [{"pos": float, "dof": tuple, "ky": float|None, "kx": float|None}]
     pointloads, distributedloads, momentloads, triangleloads : list, optional
         Native AltruxIQ load arrays.
-    E : float, default 210e9
+    E : float, default SOLVER.FALLBACK_STEEL_E_PA (210e9)
         Young's Modulus (Pa). Used for direct deflection resolution.
-    I : float, default 8.33e-6
+    I : float, default SOLVER.FALLBACK_STEEL_I_M4 (8.33e-6)
         Second Moment of Area (m^4). Used for direct deflection resolution.
-    num_points : int, default 2001
+    num_points : int, default SOLVER.DEFAULT_NUM_POINTS (2001)
         Resolution array size for downstream graphing modules.
 
     Returns
