@@ -22,7 +22,9 @@ try:
 except ImportError:
     raise ImportError("PyVista is not installed. Run: pip install pyvista")
 
-from ui.Menus import get_divisor, print_success, print_error
+from ui.Menus import  print_success, print_error
+
+from common.units import default_units,get_divisor  # canonical default units dict
 from ui.inputs import ask_choice, ask_yes_no
 from termcolor import colored
 
@@ -873,7 +875,7 @@ def _build_fea_plotter(mesh, scalars_name, *, title, units, result_kind, step_re
     return pl, pp
 
 def PyVista_reactions_schematic(beam_length, Reactions, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "force": "N", "moment": "N·m"}
+    units = units or default_units()
     l_div, f_div, m_div = get_divisor(units, "length"), get_divisor(units, "force"), get_divisor(units, "moment")
     mesh = _build_beam_mesh(np.linspace(0, beam_length/l_div, 100), np.zeros(100), shape, section_dims, c/l_div, b/l_div, "Reactions")
     pl = _make_plotter()
@@ -888,7 +890,7 @@ def PyVista_reactions_schematic(beam_length, Reactions, shape, section_dims, c, 
     pl.show(screenshot=_make_screenshot_path("reactions_schematic"))
 
 def PyVista_shear_force(X_Field, Total_ShearForce, beam_length, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "force": "N"}
+    units = units or default_units()
     l_div, f_div = get_divisor(units, "length"), get_divisor(units, "force")
     draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
     X_vis, SF_vis = _downsample_for_visuals(X_Field / l_div, Total_ShearForce / f_div, target_fraction=0.2)
@@ -901,7 +903,7 @@ def PyVista_shear_force(X_Field, Total_ShearForce, beam_length, shape, section_d
     pl.show(screenshot=_make_screenshot_path("shear_force"))
 
 def PyVista_bending_moment(X_Field, Total_BendingMoment, beam_length, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "moment": "N·m"}
+    units = units or default_units()
     l_div, m_div = get_divisor(units, "length"), get_divisor(units, "moment")
     draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
     X_vis, BM_vis = _downsample_for_visuals(X_Field / l_div, Total_BendingMoment / m_div, target_fraction=0.2)
@@ -914,7 +916,7 @@ def PyVista_bending_moment(X_Field, Total_BendingMoment, beam_length, shape, sec
     pl.show(screenshot=_make_screenshot_path("bending_moment"))
 
 def PyVista_shear_stress(X_Field, ShearStress, beam_length, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "stress": "MPa"}
+    units = units or default_units()
     l_div, s_div = get_divisor(units, "length"), get_divisor(units, "stress")
     ss = np.max(np.abs(ShearStress), axis=1) if ShearStress.ndim > 1 else np.abs(ShearStress)
     draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
@@ -928,7 +930,7 @@ def PyVista_shear_stress(X_Field, ShearStress, beam_length, shape, section_dims,
     pl.show(screenshot=_make_screenshot_path("shear_stress"))
 
 def PyVista_bending_stress(X_Field, BendingStress, beam_length, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "stress": "MPa"}
+    units = units or default_units()
     l_div, s_div = get_divisor(units, "length"), get_divisor(units, "stress")
     bs = np.max(np.abs(BendingStress), axis=1) if BendingStress.ndim > 1 else np.abs(BendingStress)
     draw_length, draw_c, draw_b = beam_length / l_div, c / l_div, b / l_div
@@ -942,7 +944,7 @@ def PyVista_bending_stress(X_Field, BendingStress, beam_length, shape, section_d
     pl.show(screenshot=_make_screenshot_path("bending_stress"))
 
 def PyVista_deflection(X_Field, Deflection, beam_length, shape, section_dims, c, b, units=None):
-    units = units or {"length": "m", "length_small": "mm"}
+    units = units or default_units()
     l_div, ls_div = get_divisor(units, "length"), get_divisor(units, "length_small")
     defl_full = Deflection / ls_div
     X, defl = _downsample_for_visuals(X_Field / l_div, defl_full, target_fraction=0.1)
@@ -1534,8 +1536,7 @@ def PyVista_animation(
     ``result_to_animate`` is one of ``ShearForce``, ``BendingMoment``,
     ``ShearStress``, ``BendingStress``, ``Deflection``.
     """
-    units = units or {"length": "m", "force": "N", "moment": "N·m",
-                      "stress": "MPa", "length_small": "mm"}
+    units = units or default_units()
 
     scalar_map = {
         "ShearForce":    (Total_ShearForce,    units["force"],        "force",        "Shear Force"),

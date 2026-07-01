@@ -3,7 +3,8 @@ import sys
 
 import plotly.graph_objs as go
 import numpy as np
-from ui.Menus import get_divisor  # trusted unit divisor engine
+from common.units import get_divisor # trusted unit divisor engine
+from common.units import default_units  # canonical default units dict
 from plotting.plotting_helper import (
     draw_beam, draw_support, draw_big_support, draw_fixed_support,
     draw_point_load, draw_distributed_load, draw_moment_load,
@@ -31,7 +32,7 @@ def plot_beam_schematic(beam_type, beam_length, A, B, continuous_supports, loads
     Handles Simple, Overhanging, Cantilever, Fixed-Fixed, Propped, Continuous/Custom.
     """
     if units is None:
-        units = {'length': 'm', 'force': 'N', 'moment': 'N\u00b7m'}
+        units = default_units()
 
     len_div = get_divisor(units, 'length')
     force_div = get_divisor(units, 'force')
@@ -114,7 +115,7 @@ def plot_reaction_diagram(reactions, units=None):
     determinate or indeterminate support configuration.
     """
     if units is None:
-        units = {'length': 'm', 'force': 'N', 'moment': 'N\u00b7m'}
+        units = default_units()
 
     len_div = get_divisor(units, 'length')
     force_div = get_divisor(units, 'force')

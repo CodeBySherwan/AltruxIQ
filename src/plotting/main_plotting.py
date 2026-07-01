@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from plotly.subplots import make_subplots
 import matplotlib.gridspec as gridspec
 
-from ui.Menus import get_divisor
+from common.units import get_scale
 
 try:
     from plotting import plot_theme as T
@@ -49,17 +49,12 @@ def format_matplot_sci(val):
 # --------------------------------------------------------------------------
 #  UNIT SCALING
 # --------------------------------------------------------------------------
-def _get_scale(units):
-    if units is None:
-        units = {'length': 'm', 'length_small': 'mm', 'force': 'N',
-                 'moment': 'N\u00b7m', 'stress': 'Pa'}
-        return units, 1.0, 1.0, 1.0, 1.0, 1.0
-    l_div = get_divisor(units, 'length')
-    ls_div = get_divisor(units, 'length_small')
-    f_div = get_divisor(units, 'force')
-    m_div = get_divisor(units, 'moment')
-    s_div = get_divisor(units, 'length_small')
-    return units, l_div, ls_div, f_div, m_div, s_div
+# Batch SI->display divisors come from `common.units.get_scale`.
+# NOTE: this supersedes the former local `_get_scale`, which computed the
+# stress divisor from 'length_small' (off by ~1e9). `get_scale(...).stress`
+# now returns the real STRESS divisor (metric 1e6 -> MPa). The destructuring
+# pattern `u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)` is
+# positional-compatible (namedtuple), so call sites are unchanged.
 
 
 def find_critical_points(X, Y):
@@ -123,21 +118,21 @@ def _render_single(x, y, key, title, value_unit, length_unit, ytitle, sig=2, nam
 #  PLOTLY — SINGLE DIAGRAMS
 # ==========================================================================
 def Plotly_shear_force(X_Field, Total_ShearForce, beam_length, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     _render_single(X_Field / l_div, Total_ShearForce / f_div, "shear",
                    "Shear Force Diagram", u['force'], u['length'],
                    f"Shear Force ({u['force']})")
 
 
 def Plotly_Deflection(X_Field, Deflection, beam_length, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     _render_single(X_Field / l_div, Deflection / ls_div, "deflect",
                    "Deflection Diagram", u['length_small'], u['length'],
                    f"Deflection ({u['length_small']})", sig=3)
 
 
 def Plotly_ShearStress(X_Field, ShearStress, beam_length, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     if len(np.shape(ShearStress)) > 1:
         ShearStress = np.max(np.abs(ShearStress), axis=1)
     _render_single(X_Field / l_div, ShearStress / s_div, "shearstress",
@@ -146,14 +141,14 @@ def Plotly_ShearStress(X_Field, ShearStress, beam_length, units=None):
 
 
 def Plotly_bending_moment(X_Field, Total_BendingMoment, beam_length, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     _render_single(X_Field / l_div, Total_BendingMoment / m_div, "moment",
                    "Bending Moment Diagram", u['moment'], u['length'],
                    f"Bending Moment ({u['moment']})")
 
 
 def Plotly_BendingStress(X_Field, BendingStress, beam_length, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     if len(np.shape(BendingStress)) > 1:
         BendingStress = np.max(np.abs(BendingStress), axis=1)
     _render_single(X_Field / l_div, BendingStress / s_div, "bendstress",
@@ -190,7 +185,7 @@ def _add_series(fig, row, x, y, key, length_unit, value_unit):
 
 def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
                    plot_type='Both', units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     x = X_Field / l_div
     sf = Total_ShearForce / f_div
     bm = Total_BendingMoment / m_div
@@ -225,7 +220,7 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
 
 def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
                              Deflection=None, ShearStress=None, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     step = 5
     x = X_Field[::step] / l_div
 
@@ -295,7 +290,7 @@ def _render_single_mpl(ax, x, y, key, title, value_unit, length_unit, ylabel, si
 
 
 def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, plot_type='Both', units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     x = X_Field / l_div
     sf = Total_ShearForce / f_div
     bm = Total_BendingMoment / m_div
@@ -320,7 +315,7 @@ def Matplot_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, plot_type='B
 
 
 def Matplot_ShearStress(X_Field, Shear_stress, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     y = np.max(np.abs(Shear_stress), axis=1) if len(np.shape(Shear_stress)) > 1 else Shear_stress
     fig, ax = plt.subplots(figsize=(10.5, 6))
     _render_single_mpl(ax, X_Field / l_div, y / s_div, "shearstress",
@@ -332,7 +327,7 @@ def Matplot_ShearStress(X_Field, Shear_stress, units=None):
 
 
 def Matplot_BendingStress(X_Field, BendingStress, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     y = np.max(np.abs(BendingStress), axis=1) if len(np.shape(BendingStress)) > 1 else BendingStress
     fig, ax = plt.subplots(figsize=(10.5, 6))
     _render_single_mpl(ax, X_Field / l_div, y / s_div, "bendstress",
@@ -344,7 +339,7 @@ def Matplot_BendingStress(X_Field, BendingStress, units=None):
 
 
 def Matplot_Deflection(X_Field, Deflection, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     fig, ax = plt.subplots(figsize=(10.5, 6))
     _render_single_mpl(ax, X_Field / l_div, Deflection / ls_div, "deflect",
                        "Deflection Diagram", u['length_small'], u['length'],
@@ -356,7 +351,7 @@ def Matplot_Deflection(X_Field, Deflection, units=None):
 
 def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment,
                      Deflection=None, ShearStress=None, units=None):
-    u, l_div, ls_div, f_div, m_div, s_div = _get_scale(units)
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     x = X_Field / l_div
 
     panels = [
