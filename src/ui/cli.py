@@ -1787,7 +1787,13 @@ def run_extended_menu():
                         # Perform actual calculations
                         if beam_type == "Stepped Bar":
                             # Per-segment stress computation for stepped bars
-                            Shear_stress = np.zeros((len(y_array), len(X_Field)))
+                            # Bug-15 fix: the module-level y_array is empty for any
+                            # Stepped workflow (geometry lives in each segment dict).
+                            # Size the shear-stress grid from the segment's y_array,
+                            # not the global — otherwise the array is (0, N) and the
+                            # per-column assignment below raises a broadcast ValueError.
+                            n_y = len(segments[0]['y_array']) if segments else 10001
+                            Shear_stress = np.zeros((n_y, len(X_Field)))
                             bending_stress = np.zeros(len(X_Field))
                             min_fos = float('inf')
                             for i, x in enumerate(X_Field):
