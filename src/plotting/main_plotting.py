@@ -156,6 +156,34 @@ def Plotly_BendingStress(X_Field, BendingStress, beam_length, units=None):
                    f"Bending Stress ({u['stress']})")
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+#  STEPPED BAR — AXIAL ANALYSIS (Plotly)
+#  Same _render_single renderer as shear/moment/stress, just different
+#  SERIES keys (defined in plot_theme.SERIES) so colours stay consistent.
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def Plotly_AxialForce(X_Field, AxialForce, beam_length, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    _render_single(X_Field / l_div, AxialForce / f_div, "axial",
+                   "Axial Force Diagram", u['force'], u['length'],
+                   f"Axial Force ({u['force']})")
+
+
+def Plotly_AxialDisplacement(X_Field, AxialDisplacement, beam_length, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    _render_single(X_Field / l_div, AxialDisplacement / ls_div, "axialdispl",
+                   "Axial Displacement Diagram", u['length_small'], u['length'],
+                   f"Axial Displacement ({u['length_small']})", sig=3)
+
+
+def Plotly_CombinedStress(X_Field, CombinedStress, beam_length, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    if len(np.shape(CombinedStress)) > 1:
+        CombinedStress = np.max(np.abs(CombinedStress), axis=1)
+    _render_single(X_Field / l_div, CombinedStress / s_div, "combinedstress",
+                   "Combined Stress Diagram (Bending + Axial)", u['stress'], u['length'],
+                   f"Combined Stress ({u['stress']})")
+
+
 # ==========================================================================
 #  PLOTLY — STACKED / COMBINED
 # ==========================================================================
@@ -219,7 +247,8 @@ def Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
 
 
 def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
-                             Deflection=None, ShearStress=None, units=None):
+                             Deflection=None, ShearStress=None, AxialForce=None,
+                             CombinedStress=None, units=None):
     u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     step = 5
     x = X_Field[::step] / l_div
@@ -237,6 +266,15 @@ def Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, bea
             ss = np.max(np.abs(ss), axis=1)
         panels.append(("shearstress", ss[::step] / s_div,
                        f"Shear Stress ({u['stress']})", u['stress'], "Shear Stress Diagram"))
+    if AxialForce is not None:
+        panels.append(("axial", AxialForce[::step] / f_div,
+                       f"Axial Force ({u['force']})", u['force'], "Axial Force Diagram"))
+    if CombinedStress is not None:
+        cs = CombinedStress
+        if len(np.shape(cs)) > 1:
+            cs = np.max(np.abs(cs), axis=1)
+        panels.append(("combinedstress", cs[::step] / s_div,
+                       f"Combined Stress ({u['stress']})", u['stress'], "Combined Stress Diagram"))
 
     n = len(panels)
     fig = make_subplots(rows=n, cols=1, shared_xaxes=True, vertical_spacing=0.07,
@@ -338,6 +376,44 @@ def Matplot_BendingStress(X_Field, BendingStress, units=None):
     plt.show()
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+#  STEPPED BAR — AXIAL ANALYSIS (Matplotlib)
+#  Same _render_single_mpl renderer as the stress diagrams above.
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def Matplot_AxialForce(X_Field, AxialForce, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    fig, ax = plt.subplots(figsize=(10.5, 6))
+    _render_single_mpl(ax, X_Field / l_div, AxialForce / f_div, "axial",
+                       "Axial Force Diagram", u['force'], u['length'],
+                       f"Axial Force ({u['force']})")
+    T.add_mpl_watermark(fig)
+    fig.tight_layout()
+    plt.show()
+
+
+def Matplot_AxialDisplacement(X_Field, AxialDisplacement, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    fig, ax = plt.subplots(figsize=(10.5, 6))
+    _render_single_mpl(ax, X_Field / l_div, AxialDisplacement / ls_div, "axialdispl",
+                       "Axial Displacement Diagram", u['length_small'], u['length'],
+                       f"Axial Displacement ({u['length_small']})", sig=3)
+    T.add_mpl_watermark(fig)
+    fig.tight_layout()
+    plt.show()
+
+
+def Matplot_CombinedStress(X_Field, CombinedStress, units=None):
+    u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
+    y = np.max(np.abs(CombinedStress), axis=1) if len(np.shape(CombinedStress)) > 1 else CombinedStress
+    fig, ax = plt.subplots(figsize=(10.5, 6))
+    _render_single_mpl(ax, X_Field / l_div, y / s_div, "combinedstress",
+                       "Combined Stress Diagram", u['stress'], u['length'],
+                       f"Combined Stress ({u['stress']})")
+    T.add_mpl_watermark(fig)
+    fig.tight_layout()
+    plt.show()
+
+
 def Matplot_Deflection(X_Field, Deflection, units=None):
     u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     fig, ax = plt.subplots(figsize=(10.5, 6))
@@ -350,7 +426,8 @@ def Matplot_Deflection(X_Field, Deflection, units=None):
 
 
 def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment,
-                     Deflection=None, ShearStress=None, units=None):
+                     Deflection=None, ShearStress=None, AxialForce=None,
+                     CombinedStress=None, units=None):
     u, l_div, ls_div, f_div, m_div, s_div = get_scale(units)
     x = X_Field / l_div
 
@@ -367,6 +444,15 @@ def Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment,
             ss = np.max(np.abs(ss), axis=1)
         panels.append(("shearstress", ss / s_div, "Shear Stress Diagram",
                        u['stress'], f"Shear Stress ({u['stress']})"))
+    if AxialForce is not None:
+        panels.append(("axial", AxialForce / f_div, "Axial Force Diagram",
+                       u['force'], f"Axial Force ({u['force']})"))
+    if CombinedStress is not None:
+        cs = CombinedStress
+        if len(np.shape(cs)) > 1:
+            cs = np.max(np.abs(cs), axis=1)
+        panels.append(("combinedstress", cs / s_div, "Combined Stress Diagram",
+                       u['stress'], f"Combined Stress ({u['stress']})"))
 
     n = len(panels)
     fig, axes = plt.subplots(n, 1, figsize=(11.5, 4.3 * n), sharex=True)

@@ -33,7 +33,10 @@ from solver.stepped_solver import solve_stepped_beam
 from solver.area_solver import area_from_section
 from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
-                      Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined)
+                      Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined,
+                      Plotly_AxialForce, Matplot_AxialForce,
+                      Plotly_AxialDisplacement, Matplot_AxialDisplacement,
+                      Plotly_CombinedStress, Matplot_CombinedStress)
 from plotting.beam_plot import plot_reaction_diagram, plot_beam_schematic
 try:
     from plotting.pyvista_plotting import (
@@ -2013,9 +2016,22 @@ def run_extended_menu():
                         continue
                 elif sub_choice == '8':  # Combined plots (Plotly/Matplotlib)
                     try:
-                  
                         defl_data = Deflection if project_state.get("deflection_calculated", False) else None
                         shear_data = Shear_stress if project_state.get("stress_calculated", False) else None
+                        # Stepped Bar extras: include axial force & combined stress when solved
+                        axial_data = AxialForce if (beam_type == "Stepped Bar" and AxialForce is not None) else None
+                        combo_stress = None
+                        if beam_type == "Stepped Bar" and AxialForce is not None and project_state.get("stress_calculated", False):
+                            combo_stress = np.zeros_like(X_Field)
+                            for i, x in enumerate(X_Field):
+                                seg = next((s for s in segments if s["start"] <= x <= s["end"]), None)
+                                if seg is None:
+                                    continue
+                                sigma_axial = AxialForce[i] / seg["A"]
+                                M_val = Total_BendingMoment[i]
+                                sigma_bending = abs(M_val) * seg["c"] / seg["I"] if seg["I"] > 0 else 0.0
+                                sign = 1.0 if M_val >= 0 else -1.0
+                                combo_stress[i] = sigma_axial + sign * sigma_bending
 
                         if defl_data is None:
                             print(colored("  ℹ  Deflection not yet calculated — will be omitted from combined plot.", 'yellow'))
@@ -2024,8 +2040,20 @@ def run_extended_menu():
 
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
 
-                        print_success("Processing Combined Plots (Plotly Only):")
-                        Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length, Deflection=defl_data, ShearStress=shear_data,units=current_labels)
+                        if style == '1':
+                            print_success("Processing Combined Plots (Matplotlib):")
+                            Matplot_combined(X_Field, Total_ShearForce, Total_BendingMoment,
+                                             Deflection=defl_data, ShearStress=shear_data,
+                                             AxialForce=axial_data, CombinedStress=combo_stress, units=current_labels)
+                        elif style == '2':
+                            print_success("Processing Combined Plots (Plotly):")
+                            Plotly_combined_diagrams(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,
+                                                     Deflection=defl_data, ShearStress=shear_data,
+                                                     AxialForce=axial_data, CombinedStress=combo_stress, units=current_labels)
+                        else:
+                            print_error("Invalid style selection.")
+                            time.sleep(2)
+                            continue
 
                     except Exception as e:
                         print_error(f"Plotting error: {e}")
@@ -2033,14 +2061,17 @@ def run_extended_menu():
                         continue
 
                 elif sub_choice == '9' and beam_type == "Stepped Bar":  # Axial-Force Plot (Stepped Bar only)
+                    if AxialForce is None:
+                        print_error("Axial Force not available. Run analysis first.")
+                        time.sleep(2); continue
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Axial Force Plot (Matplotlib):")
-                            Matplot_sfd_bmd(X_Field, AxialForce, Total_BendingMoment, 'Axial Force', units=current_labels)
+                            Matplot_AxialForce(X_Field, AxialForce, units=current_labels)
                         elif style == '2':
                             print_success("Processing Axial Force Plot (Plotly):")
-                            Plotly_sfd_bmd(X_Field, AxialForce, Total_BendingMoment, beam_length, 'Axial Force', units=current_labels)
+                            Plotly_AxialForce(X_Field, AxialForce, beam_length, units=current_labels)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2051,14 +2082,17 @@ def run_extended_menu():
                         continue
 
                 elif sub_choice == '10' and beam_type == "Stepped Bar":  # Axial-Displacement Plot (Stepped Bar only)
+                    if AxialDisplacement is None:
+                        print_error("Axial Displacement not available. Run analysis first.")
+                        time.sleep(2); continue
                     try:
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Axial Displacement Plot (Matplotlib):")
-                            Matplot_Deflection(X_Field, AxialDisplacement, units=current_labels)
+                            Matplot_AxialDisplacement(X_Field, AxialDisplacement, units=current_labels)
                         elif style == '2':
                             print_success("Processing Axial Displacement Plot (Plotly):")
-                            Plotly_Deflection(X_Field, AxialDisplacement, beam_length, units=current_labels)
+                            Plotly_AxialDisplacement(X_Field, AxialDisplacement, beam_length, units=current_labels)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2069,10 +2103,12 @@ def run_extended_menu():
                         continue
 
                 elif sub_choice == '11' and beam_type == "Stepped Bar":  # Combined Stress (Stepped Bar only)
+                    if AxialForce is None or not project_state.get("stress_calculated", False):
+                        print_error("Run analysis and stress calculation first.")
+                        time.sleep(2); continue
                     try:
                         # Compute combined stress: sigma_bending + sigma_axial
                         # For each segment, find max axial stress and combine with bending
-                        from plotting.main_plotting import Matplot_BendingStress, Plotly_BendingStress
                         combined_stress = np.zeros_like(X_Field)
                         for i, x in enumerate(X_Field):
                             # Find which segment this x belongs to
@@ -2094,17 +2130,14 @@ def run_extended_menu():
                             # Combined stress (tension positive)
                             sign = 1.0 if M_val >= 0 else -1.0  # simplistic sign handling
                             combined_stress[i] = sigma_axial + sign * sigma_bending
-                        
+
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Combined Stress Plot (Matplotlib):")
-                            # Bug-16 fix: Matplot_BendingStress signature is
-                            # (X_Field, BendingStress, units=None) — no beam_length.
-                            # Passing it positionally collided with units= kwarg.
-                            Matplot_BendingStress(X_Field, combined_stress, units=current_labels)
+                            Matplot_CombinedStress(X_Field, combined_stress, units=current_labels)
                         elif style == '2':
                             print_success("Processing Combined Stress Plot (Plotly):")
-                            Plotly_BendingStress(X_Field, combined_stress, beam_length, units=current_labels)
+                            Plotly_CombinedStress(X_Field, combined_stress, beam_length, units=current_labels)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)

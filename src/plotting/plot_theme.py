@@ -75,11 +75,15 @@ NODE_MARKER = "#11161C"   # contraflexure / zero-crossing nodes
 #  PER-QUANTITY ACCENTS  (line colour + soft translucent fill)
 # --------------------------------------------------------------------------
 SERIES = {
-    "shear":       {"line": "#1E66F5", "fill": "rgba(30,102,245,0.12)",  "label": "Shear Force"},
-    "moment":      {"line": "#D64550", "fill": "rgba(214,69,80,0.12)",   "label": "Bending Moment"},
-    "deflect":     {"line": "#0E9F6E", "fill": "rgba(14,159,110,0.12)",  "label": "Deflection"},
-    "shearstress": {"line": "#0E7C86", "fill": "rgba(14,124,134,0.12)",  "label": "Shear Stress"},
-    "bendstress":  {"line": "#7C4DCB", "fill": "rgba(124,77,203,0.12)",  "label": "Bending Stress"},
+    "shear":         {"line": "#1E66F5", "fill": "rgba(30,102,245,0.12)",   "label": "Shear Force"},
+    "moment":        {"line": "#D64550", "fill": "rgba(214,69,80,0.12)",    "label": "Bending Moment"},
+    "deflect":       {"line": "#0E9F6E", "fill": "rgba(14,159,110,0.12)",   "label": "Deflection"},
+    "shearstress":   {"line": "#0E7C86", "fill": "rgba(14,124,134,0.12)",   "label": "Shear Stress"},
+    "bendstress":    {"line": "#7C4DCB", "fill": "rgba(124,77,203,0.12)",   "label": "Bending Stress"},
+    # Stepped Bar axial analysis series
+    "axial":         {"line": "#E08600", "fill": "rgba(224,134,0,0.12)",    "label": "Axial Force"},
+    "axialdispl":    {"line": "#5B8C00", "fill": "rgba(91,140,0,0.12)",     "label": "Axial Displacement"},
+    "combinedstress":{"line": "#9C2C77", "fill": "rgba(156,44,119,0.12)",   "label": "Combined Stress"},
 }
 
 # Load / action accents for the schematic
