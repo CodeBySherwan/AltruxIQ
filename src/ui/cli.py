@@ -881,6 +881,14 @@ def run_extended_menu():
     global pointloads, distributedloads, momentloads, triangleloads, loads
     global support_types, supports_list
     global beam_type  # Ensure we can access the beam_type variable
+    # Analysis result arrays — must be global so save_project()/load_project() and
+    # the display_* helpers read the computed values, not the stale module-level
+    # empties. Fixes Bug-13 (stale saves) and Bug-12 (UnboundLocalError 'segments').
+    global num_points
+    global X_Field, Total_ShearForce, Total_BendingMoment
+    global Deflection, Slopes, Curvatures, Reactions
+    global Shear_stress, bending_stress, FOS
+    global segments, AxialForce, AxialDisplacement
     num_points = 2001
     load_material_database()
     load_projects_from_disk()
