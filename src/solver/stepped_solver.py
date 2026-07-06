@@ -60,6 +60,7 @@ import sys
 
 from solver.area_solver import area_from_section
 from common.config import SOLVER
+from common.exceptions import ValidationError, SingularStiffnessMatrixError
 
 
 # =============================================================================
@@ -216,7 +217,7 @@ def _build_mesh(
                 break
 
         if seg_props is None:
-            raise ValueError(
+            raise ValidationError(
                 f"Element x=[{x_i:.6f}, {x_j:.6f}] does not belong to "
                 f"any segment."
             )
@@ -290,7 +291,7 @@ def _apply_point_loads(F, nodes, pointloads, momentloads):
         best = min(range(len(nodes)), key=lambda k: abs(nodes[k] - pos))
         if abs(nodes[best] - pos) < 1e-6:
             return best
-        raise ValueError(f"{label} at x={pos:.6f} has no corresponding node.")
+        raise ValidationError(f"{label} at x={pos:.6f} has no corresponding node.")
 
     for pl in (pointloads or []):
         idx = _node_idx(pl[0], "Point load")
@@ -409,7 +410,7 @@ def _apply_boundary_conditions(K, F, nodes, supports):
     constrained_dofs = sorted(constrained)
 
     if not free_dofs:
-        raise ValueError(
+        raise ValidationError(
             "All DOFs are constrained — structure is over-constrained."
         )
 
@@ -630,21 +631,21 @@ def solve_stepped_beam(
     # 1. Validate and sort segments
     # ------------------------------------------------------------------
     if not segments:
-        raise ValueError("At least one segment must be defined.")
+        raise ValidationError("At least one segment must be defined.")
 
     segments = sorted(segments, key=lambda s: float(s["start"]))
 
     for i in range(len(segments) - 1):
         gap = abs(float(segments[i]["end"]) - float(segments[i + 1]["start"]))
         if gap > 1e-6:
-            raise ValueError(
+            raise ValidationError(
                 f"Segments are not contiguous: gap between segment {i} "
                 f"(end={segments[i]['end']}) and segment {i+1} "
                 f"(start={segments[i+1]['start']})."
             )
 
     if float(segments[0]["start"]) > 1e-6:
-        raise ValueError(
+        raise ValidationError(
             f"First segment must start at x=0 (got {segments[0]['start']})."
         )
 
@@ -657,7 +658,7 @@ def solve_stepped_beam(
     )
 
     if len(nodes) < 2:
-        raise ValueError(
+        raise ValidationError(
             "Mesh has fewer than 2 nodes. Check segment and load definitions."
         )
 
@@ -690,7 +691,7 @@ def solve_stepped_beam(
     try:
         d_free = solve(K_ff, F_f)
     except _SciLinAlgError as exc:
-        raise ValueError(
+        raise SingularStiffnessMatrixError(
             "Global stiffness matrix is singular. The structure may be "
             "unstable or under-constrained. Check support definitions."
         ) from exc

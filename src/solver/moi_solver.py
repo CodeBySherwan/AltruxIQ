@@ -9,6 +9,8 @@
 import numpy as np
 # pyrefly: ignore [missing-import]
 from termcolor import cprint, colored
+
+from common.exceptions import SectionGeometryError
 # --------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------
 def get_moi_scale(units_dict):
@@ -121,10 +123,10 @@ def display_cross_section(shape_type):
     print("")
 
 def _validate_positive(**kwargs):
-    """Raise ValueError if any value is not strictly positive."""
+    """Raise SectionGeometryError if any value is not strictly positive."""
     for name, val in kwargs.items():
         if val <= 0:
-            raise ValueError(f"{name} must be a positive number (got {val}).")
+            raise SectionGeometryError(f"{name} must be a positive number (got {val}).")
 
 # ---------------------------------------------------------------------------
 # Profile Functions  (all return 6-tuple)
@@ -154,9 +156,9 @@ def inertia_moment_ibeam(units=None):
 
         _validate_positive(bf=bf, tf=tf, hw=hw, tw=tw)
         if tw >= bf:
-            raise ValueError("Web thickness tw must be less than flange width bf.")
+            raise SectionGeometryError("Web thickness tw must be less than flange width bf.")
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -221,9 +223,9 @@ def inertia_moment_tbeam(units=None):
 
         _validate_positive(bf=bf, tf=tf, hw=hw, tw=tw)
         if tw >= bf:
-            raise ValueError("Web thickness tw must be less than flange width bf.")
+            raise SectionGeometryError("Web thickness tw must be less than flange width bf.")
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -327,7 +329,7 @@ def inertia_moment_circle(units=None):
 
         _validate_positive(diameter=diameter)
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -379,9 +381,9 @@ def inertia_moment_hollow_circle(units=None):
 
         _validate_positive(outer_diameter=outer_diameter, inner_diameter=inner_diameter)
         if inner_diameter >= outer_diameter:
-            raise ValueError("Inner diameter must be strictly less than outer diameter.")
+            raise SectionGeometryError("Inner diameter must be strictly less than outer diameter.")
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -441,7 +443,7 @@ def inertia_moment_rectangle(units=None):
 
         _validate_positive(b=b, h=h)
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -492,7 +494,7 @@ def inertia_moment_square(units=None):
 
         _validate_positive(a=a)
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -543,9 +545,9 @@ def inertia_moment_hollow_square(units=None):
 
         _validate_positive(outer_width=outer_width, inner_width=inner_width)
         if inner_width >= outer_width:
-            raise ValueError("Inner side length must be strictly less than outer side length.")
+            raise SectionGeometryError("Inner side length must be strictly less than outer side length.")
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
@@ -604,11 +606,11 @@ def inertia_moment_hollow_rectangle(units=None):
 
         _validate_positive(outer_b=outer_b, outer_h=outer_h, inner_b=inner_b, inner_h=inner_h)
         if inner_b >= outer_b:
-            raise ValueError("Inner width b must be strictly less than outer width B.")
+            raise SectionGeometryError("Inner width b must be strictly less than outer width B.")
         if inner_h >= outer_h:
-            raise ValueError("Inner height h must be strictly less than outer height H.")
+            raise SectionGeometryError("Inner height h must be strictly less than outer height H.")
 
-    except Exception as e:
+    except (SectionGeometryError, ValueError, TypeError, EOFError) as e:
         print(colored("╔══════════════════════════════════════════════════════════════╗", 'red', attrs=['bold']))
         print(colored("║                          ERROR                               ║", 'red', attrs=['bold']))
         print(colored("╚══════════════════════════════════════════════════════════════╝", 'red', attrs=['bold']))
