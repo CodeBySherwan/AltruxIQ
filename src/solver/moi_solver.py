@@ -11,24 +11,7 @@ import numpy as np
 from termcolor import cprint, colored
 
 from common.exceptions import SectionGeometryError
-# --------------------------------------------------------------------------------
-# --------------------------------------------------------------------------------
-def get_moi_scale(units_dict):
-    """
-    Returns (len_div, i_div, len_unit, i_unit) to dynamically scale 
-    cross-sectional properties for display purposes.
-    """
-    if units_dict is None:
-        # Default fallback to Metric (SI) if no units dict is provided
-        return 1.0, 1.0, "m", "m⁴"
-    
-    is_imperial = units_dict.get('length') == 'ft'
-    if is_imperial:
-        # Cross-section dimensions are conventionally shown in inches (in) and in⁴ for Imperial
-        return 0.0254, (0.0254)**4, "in", "in⁴"
-    else:
-        # Default behavior for Metric (meters and m⁴)
-        return 1.0, 1.0, "m", "m⁴"
+from common.units import get_divisor, default_units
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
@@ -141,6 +124,7 @@ def inertia_moment_ibeam(units=None):
     Ix, "I-beam", c, tw, y_array, section_dims
     section_dims keys: type, bf, tf, hw, tw, H
     """
+    units = units or default_units()
     try:
         print_header("I-BEAM PROFILE")
         display_cross_section("I-beam")
@@ -177,7 +161,8 @@ def inertia_moment_ibeam(units=None):
     Ix_total   = 2.0 * I_flange + I_web
     y_array    = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     # Display
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
@@ -208,6 +193,7 @@ def inertia_moment_tbeam(units=None):
     Ix, "T-beam", c, tw, y_array, section_dims
     section_dims keys: type, bf, tf, hw, tw, y_bar, H
     """
+    units = units or default_units()
     try:
         print_header("T-BEAM PROFILE")
         display_cross_section("T-beam")
@@ -262,13 +248,12 @@ def inertia_moment_tbeam(units=None):
     Se_top = Ix_total / c_top
     Se_bot = Ix_total / c_bot
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
-    # derived unit
-    a_div = (0.3048)**2 if units and units.get('length') == 'ft' else 1.0
-    sm_div = (0.0254)**3 if units and units.get('length') == 'ft' else 1.0
-    a_unit = "ft²" if units and units.get('length') == 'ft' else "m²"
-    sm_unit = "in³" if units and units.get('length') == 'ft' else "m³"
+    # derived unit divisors/labels — sourced from common.units (single source of truth)
+    a_div, sm_div = get_divisor(units, 'area'), get_divisor(units, 'sec_mod')
+    a_unit, sm_unit = units['area'], units['sec_mod']
 
     # Display
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
@@ -317,6 +302,7 @@ def inertia_moment_circle(units=None):
     Ix, "Circle", c, diameter, y_array, section_dims
     section_dims keys: type, diameter, radius
     """
+    units = units or default_units()
     try:
         print_header("SOLID CIRCULAR PROFILE")
         display_cross_section("Circle")
@@ -342,7 +328,8 @@ def inertia_moment_circle(units=None):
     A        = np.pi * r**2
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = r)", c / len_div, len_unit, precision=4, color='yellow')
@@ -368,6 +355,7 @@ def inertia_moment_hollow_circle(units=None):
     Ix, "Hollow Circle", c, outer_diameter, y_array, section_dims
     section_dims keys: type, r_outer, r_inner, diameter_outer, diameter_inner
     """
+    units = units or default_units()
     try:
         print_header("HOLLOW CIRCULAR PROFILE")
         display_cross_section("Hollow Circle")
@@ -398,7 +386,8 @@ def inertia_moment_hollow_circle(units=None):
     A        = np.pi * (r_o**2 - r_i**2)
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = r_o)", c / len_div, len_unit, precision=4, color='yellow')
@@ -430,6 +419,7 @@ def inertia_moment_rectangle(units=None):
     Ix, "Rectangle", c, b, y_array, section_dims
     section_dims keys: type, width, height
     """
+    units = units or default_units()
     try:
         print_header("RECTANGULAR PROFILE")
         display_cross_section("Rectangle")
@@ -455,7 +445,8 @@ def inertia_moment_rectangle(units=None):
     A        = b * h
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = h/2)", c / len_div, len_unit, precision=4, color='yellow')
@@ -482,6 +473,7 @@ def inertia_moment_square(units=None):
     Ix, "Square", c, a, y_array, section_dims
     section_dims keys: type, side
     """
+    units = units or default_units()
     try:
         print_header("SQUARE PROFILE")
         display_cross_section("Square")
@@ -506,7 +498,8 @@ def inertia_moment_square(units=None):
     A        = a**2
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = a/2)", c / len_div, len_unit, precision=4, color='yellow')
@@ -532,6 +525,7 @@ def inertia_moment_hollow_square(units=None):
     Ix, "Hollow Square", c, outer_width, y_array, section_dims
     section_dims keys: type, outer_width, inner_width, t_wall
     """
+    units = units or default_units()
     try:
         print_header("HOLLOW SQUARE PROFILE")
         display_cross_section("Hollow Square")
@@ -560,7 +554,8 @@ def inertia_moment_hollow_square(units=None):
     A        = outer_width**2 - inner_width**2
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = B/2)", c / len_div, len_unit, precision=4, color='yellow')
@@ -591,6 +586,7 @@ def inertia_moment_hollow_rectangle(units=None):
     Ix, "Hollow Rectangle", c, outer_b, y_array, section_dims
     section_dims keys: type, outer_b, outer_h, inner_b, inner_h, t_flange, t_web
     """
+    units = units or default_units()
     try:
         print_header("HOLLOW RECTANGULAR PROFILE")
         display_cross_section("Hollow Rectangle")
@@ -626,7 +622,8 @@ def inertia_moment_hollow_rectangle(units=None):
     A        = outer_b * outer_h - inner_b * inner_h
     y_array  = np.linspace(-c, c, 10001)
 
-    len_div, i_div, len_unit, i_unit = get_moi_scale(units)
+    len_div, i_div = get_divisor(units, 'length'), get_divisor(units, 'inertia')
+    len_unit, i_unit = units['length'], units['inertia']
 
     print_result("MOMENT OF INERTIA", Ix_total / i_div, i_unit, precision=6, color='green')
     print_result("NEUTRAL AXIS DISTANCE (c = H/2)", c / len_div, len_unit, precision=4, color='yellow')

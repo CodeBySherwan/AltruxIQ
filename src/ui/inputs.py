@@ -8,7 +8,7 @@ import numpy as np
 # =============================
 # `system_multiplier(system, qty)` is the drop-in replacement for the legacy
 # CONVERSION_TO_SI[system][qty] lookup that used to live here.
-from common.units import system_multiplier, default_units, UNIT_SYSTEMS
+from common.units import system_multiplier, default_units, UNIT_SYSTEMS, to_json
 from common.config import SOLVER
 
 from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
@@ -802,20 +802,19 @@ def define_custom_material(unit_system="Metric", units=None):
     if name is None:
         return None
 
-    is_imperial = (unit_system == "Imperial")
-
     # Inputs in active units, converted to JSON base schema (kg/m³, MPa, GPa)
+    # via common.units.to_json — single source of truth for the storage convention
     dens_val = ask_float("Enter density", unit=units['density'], minimum=0, exclusive_min=True, allow_cancel=True)
     if dens_val is None: return None
-    json_dens = dens_val * 16.01846 if is_imperial else dens_val
+    json_dens = to_json(units, 'density', dens_val)
 
     yield_val = ask_float("Enter yield strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
     if yield_val is None: return None
-    json_yield = yield_val * 6.894757 if is_imperial else yield_val
+    json_yield = to_json(units, 'stress', yield_val)
 
     ult_val = ask_float("Enter ultimate strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
     if ult_val is None: return None
-    json_ult = ult_val * 6.894757 if is_imperial else ult_val
+    json_ult = to_json(units, 'stress', ult_val)
 
     if json_yield >= json_ult:
         print_error("Yield Strength must be less than Ultimate Strength.")
@@ -824,7 +823,7 @@ def define_custom_material(unit_system="Metric", units=None):
 
     mod_val = ask_float("Enter elastic modulus", unit=units['modulus'], minimum=0, exclusive_min=True, allow_cancel=True)
     if mod_val is None: return None
-    json_mod = mod_val * 0.006894757 if is_imperial else mod_val
+    json_mod = to_json(units, 'modulus', mod_val)
 
     poisson = ask_float("Enter Poisson's ratio", minimum=0, maximum=0.5, exclusive_min=True, exclusive_max=True, default=0.3, allow_cancel=True)
     if poisson is None: return None

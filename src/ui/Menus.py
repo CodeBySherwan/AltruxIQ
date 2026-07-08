@@ -251,15 +251,6 @@ from common.config import SERVICEABILITY
 # =============================
 # Utility & Helper Functions
 # =============================
-def get_inverse_multiplier(units_dict, quantity):
-    """DEPRECATED: thin compatibility shim over :func:`common.units.get_divisor`.
-
-    Historically this returned the SI->display divisor for only 4 quantities
-    (and 1.0 for everything else, including imperial sec_mod/stress). All real
-    callers have been migrated to ``get_divisor``; new code should not use this.
-    """
-    return get_divisor(units_dict, quantity)
-
 def clear_screen():
     """Clear the terminal screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
