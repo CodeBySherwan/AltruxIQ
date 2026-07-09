@@ -23,6 +23,12 @@ if _src not in sys.path:
     sys.path.insert(0, _src)
 from common.paths import ensure_src_in_path, PROJECTS_FILE
 from common.config import SOLVER
+from common.exceptions import (
+    AltruxIQError,
+    ValidationError,
+    SingularStiffnessMatrixError,
+    PersistenceError,
+)
 ensure_src_in_path()
 
     
@@ -606,7 +612,7 @@ def save_projects_to_disk():
 
         print_success("Project saved to disk successfully!") # Only prints if dump succeeds
         
-    except Exception as e:
+    except (OSError, PersistenceError) as e:
         print_error(f"Error saving projects to disk: {e}")
         # Notice there is no success print statement here
 
@@ -1673,7 +1679,7 @@ def run_extended_menu():
                         ui_close('green')
                         ui_footer("Press Enter to return to the Solution menu...")
         
-                    except Exception as e:
+                    except (ValidationError, SingularStiffnessMatrixError, AltruxIQError) as e:
                         print_error(f"Error solving beam: {e}")
                         time.sleep(2)
                         continue

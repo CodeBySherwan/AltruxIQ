@@ -13,6 +13,8 @@ import numpy as np
 import os
 import sys
 
+from common.exceptions import SectionGeometryError
+
 def area_from_section(shape: str, section_dims: dict) -> float:
     """
     Compute cross-sectional area A (m²) from section dimensions.
@@ -31,11 +33,11 @@ def area_from_section(shape: str, section_dims: dict) -> float:
 
     Raises
     ------
-    ValueError
-        If the shape is not recognised or dimensions are missing.
+    SectionGeometryError
+        If the shape is not recognised or its dimensions are missing/invalid.
     """
     if not section_dims or not isinstance(section_dims, dict):
-        raise ValueError("section_dims must be a non-empty dict.")
+        raise SectionGeometryError("section_dims must be a non-empty dict.")
 
     # -----------------------------------------------------------------------
     # 1. I-beam
@@ -46,7 +48,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         hw = section_dims.get('hw', 0.0)
         tw = section_dims.get('tw', 0.0)
         if any(v <= 0 for v in (bf, tf, hw, tw)):
-            raise ValueError("I-beam dimensions must all be positive.")
+            raise SectionGeometryError("I-beam dimensions must all be positive.")
         return 2.0 * bf * tf + tw * hw
 
     # -----------------------------------------------------------------------
@@ -58,7 +60,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         hw = section_dims.get('hw', 0.0)
         tw = section_dims.get('tw', 0.0)
         if any(v <= 0 for v in (bf, tf, hw, tw)):
-            raise ValueError("T-beam dimensions must all be positive.")
+            raise SectionGeometryError("T-beam dimensions must all be positive.")
         return bf * tf + hw * tw
 
     # -----------------------------------------------------------------------
@@ -67,7 +69,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
     elif shape in ("Circle", "Solid Circle"):
         r = section_dims.get('radius', 0.0)
         if r <= 0:
-            raise ValueError("Circle radius must be positive.")
+            raise SectionGeometryError("Circle radius must be positive.")
         return np.pi * r ** 2
 
     # -----------------------------------------------------------------------
@@ -77,7 +79,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         ro = section_dims.get('r_outer', 0.0)
         ri = section_dims.get('r_inner', 0.0)
         if ro <= 0 or ri <= 0 or ri >= ro:
-            raise ValueError("Hollow Circle: 0 < r_inner < r_outer required.")
+            raise SectionGeometryError("Hollow Circle: 0 < r_inner < r_outer required.")
         return np.pi * (ro ** 2 - ri ** 2)
 
     # -----------------------------------------------------------------------
@@ -87,7 +89,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         width = section_dims.get('width', 0.0)
         height = section_dims.get('height', 0.0)
         if width <= 0 or height <= 0:
-            raise ValueError("Rectangle dimensions must be positive.")
+            raise SectionGeometryError("Rectangle dimensions must be positive.")
         return width * height
 
     # -----------------------------------------------------------------------
@@ -96,7 +98,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
     elif shape == "Square":
         side = section_dims.get('side', 0.0)
         if side <= 0:
-            raise ValueError("Square side length must be positive.")
+            raise SectionGeometryError("Square side length must be positive.")
         return side ** 2
 
     # -----------------------------------------------------------------------
@@ -106,7 +108,7 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         B = section_dims.get('outer_width', 0.0)
         b = section_dims.get('inner_width', 0.0)
         if B <= 0 or b <= 0 or b >= B:
-            raise ValueError("Hollow Square: 0 < inner_width < outer_width required.")
+            raise SectionGeometryError("Hollow Square: 0 < inner_width < outer_width required.")
         return B ** 2 - b ** 2
 
     # -----------------------------------------------------------------------
@@ -118,16 +120,16 @@ def area_from_section(shape: str, section_dims: dict) -> float:
         inner_b = section_dims.get('inner_b', 0.0)
         inner_h = section_dims.get('inner_h', 0.0)
         if any(v <= 0 for v in (outer_b, outer_h, inner_b, inner_h)):
-            raise ValueError("Hollow Rectangle dimensions must all be positive.")
+            raise SectionGeometryError("Hollow Rectangle dimensions must all be positive.")
         if inner_b >= outer_b or inner_h >= outer_h:
-            raise ValueError("Hollow Rectangle: inner must be smaller than outer.")
+            raise SectionGeometryError("Hollow Rectangle: inner must be smaller than outer.")
         return outer_b * outer_h - inner_b * inner_h
 
     # -----------------------------------------------------------------------
     # Fallback
     # -----------------------------------------------------------------------
     else:
-        raise ValueError(
+        raise SectionGeometryError(
             f"Unknown shape: '{shape}'. "
             f"Supported: I-beam, T-beam, Circle, Hollow Circle, "
             f"Rectangle, Square, Hollow Square, Hollow Rectangle."

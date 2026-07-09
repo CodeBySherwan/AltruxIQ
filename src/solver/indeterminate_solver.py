@@ -22,6 +22,7 @@ from indeterminatebeam import (
 )
 
 from common.config import SOLVER
+from common.exceptions import ValidationError
 
 
 def _build_supports(beam_type: str, beam_length: float, supports: list) -> list:
@@ -72,7 +73,7 @@ def _build_supports(beam_type: str, beam_length: float, supports: list) -> list:
         return result
 
     else:
-        raise ValueError(
+        raise ValidationError(
             f"Unknown beam_type: '{beam_type}'. "
             f"Valid options: Simple, Cantilever, Fixed-Fixed, Propped, Continuous"
         )
