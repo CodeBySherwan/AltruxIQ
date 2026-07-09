@@ -10,6 +10,7 @@ import numpy as np
 # CONVERSION_TO_SI[system][qty] lookup that used to live here.
 from common.units import system_multiplier, default_units, UNIT_SYSTEMS, to_json
 from common.config import SOLVER
+from common.exceptions import SectionGeometryError
 
 from ui.Menus import (print_error, print_success, print_title, print_option, clear_screen,
                      ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head)
@@ -534,7 +535,7 @@ def manage_loads(unit_system="Metric", units=None, beam_type=None):
                 
                 time.sleep(1.5)
             
-            except Exception as e:
+            except (ValueError, EOFError) as e:
                 print_error(f"Error adding point load: {e}")
                 time.sleep(2)
     
@@ -581,7 +582,7 @@ def manage_loads(unit_system="Metric", units=None, beam_type=None):
                 print_success(f"Added UDL: {intensity/d_mult} {dist_unit} from x = {start/l_mult} {units['length']} to x = {end/l_mult} {units['length']}")
                 time.sleep(1.5)
             
-            except Exception as e:
+            except (ValueError, EOFError) as e:
                 print_error(f"Error adding distributed load: {e}")
                 time.sleep(2)
     
@@ -621,7 +622,7 @@ def manage_loads(unit_system="Metric", units=None, beam_type=None):
                 print_success(f"Added moment load: {moment/m_mult} {units['moment']} at x = {pos/l_mult} {units['length']}")
                 time.sleep(1.5)
             
-            except Exception as e:
+            except (ValueError, EOFError) as e:
                 print_error(f"Error adding moment load: {e}")
                 time.sleep(2)
     
@@ -672,7 +673,7 @@ def manage_loads(unit_system="Metric", units=None, beam_type=None):
                 print_success(f"Peak intensity: {intensity/d_mult} {dist_unit}, Lowest intensity: {intensityL/d_mult} {dist_unit}")
                 time.sleep(1.5)
             
-            except Exception as e:
+            except (ValueError, EOFError) as e:
                 print_error(f"Error adding triangular load: {e}")
                 time.sleep(2)
     
@@ -1002,7 +1003,7 @@ def define_stepped_segments(unit_system="Metric", units=None):
         # Compute cross-sectional area
         try:
             A = area_from_section(shape, section_dims)
-        except Exception as e:
+        except SectionGeometryError as e:
             print_error(f"Error computing area: {e}")
             time.sleep(2)
             return None
