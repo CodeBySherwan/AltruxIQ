@@ -40,7 +40,7 @@ from termcolor import colored
 
 try:
     from plotting import plot_theme as T
-except Exception:                       # pragma: no cover (flat import for previews)
+except ImportError:                     # pragma: no cover (flat import for previews)
     import plot_theme as T
 
 
@@ -135,13 +135,13 @@ def export_plotly(fig, default_name="diagram"):
             _write_interactive_html(fig, html_path)
             saved.append(html_path)
             print_success(f"Interactive HTML saved: {html_path}")
-        except Exception as e:
+        except OSError as e:
             print_error(f"Could not write HTML: {e}")
 
     if choice in ("2", "3"):
         try:
             saved.append(_export_png_via_browser(fig, base, stamp))
-        except Exception as e:
+        except OSError as e:
             print_error(f"PNG export failed: {e}")
             print_error("You can still use the \U0001f4f7 camera icon in the diagram window.")
 

@@ -49,7 +49,7 @@ def _live_clock_supported():
     """True only when stdout is an interactive TTY that can take ANSI codes."""
     try:
         return sys.stdout.isatty()
-    except Exception:
+    except AttributeError:
         return False
 
 
@@ -77,7 +77,7 @@ def input_with_live_clock(prompt_text, render_clock_line):
                 sys.stdout.write(render_clock_line())
                 sys.stdout.write("\0338")        # restore cursor
                 sys.stdout.flush()
-            except Exception:
+            except (OSError, ValueError):
                 return
 
     ticker = threading.Thread(target=_worker, daemon=True)

@@ -23,7 +23,7 @@ from common.units import get_scale
 
 try:
     from plotting import plot_theme as T
-except Exception:                       # pragma: no cover  (flat import for previews)
+except ImportError:                     # pragma: no cover  (flat import for previews)
     import plot_theme as T
 
 T.register_plotly_theme()
@@ -31,7 +31,7 @@ T.apply_matplotlib_theme()
 
 try:
     from plotting.export_helper import present_plotly
-except Exception:                       # pragma: no cover (flat import for previews)
+except ImportError:                     # pragma: no cover (flat import for previews)
     from export_helper import present_plotly
 
 
