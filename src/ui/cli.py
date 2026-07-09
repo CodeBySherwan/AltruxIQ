@@ -229,7 +229,7 @@ def load_project():
         if not saved_lbl and proj.get('saved_at'):
             try:
                 saved_lbl = fmt_datetime(datetime.datetime.fromisoformat(proj['saved_at']))
-            except Exception:
+            except (ValueError, TypeError):
                 saved_lbl = None
         saved_lbl = saved_lbl or "date not recorded"
         btype = proj.get('beam_type', 'Unknown')
@@ -379,7 +379,7 @@ def print_loaded_project_summary():
         if not _sv:
             try:
                 _sv = fmt_datetime(datetime.datetime.fromisoformat(current_project['saved_at']))
-            except Exception:
+            except (ValueError, TypeError):
                 _sv = "unknown"
         print(colored(f"Saved: {_sv}", 'green'))
     print(f"Beam Length: {beam_length} m")
@@ -503,7 +503,7 @@ def delete_project():
                 with open(PROJECTS_FILE, 'w') as file:
                     json.dump(beam_storage, file, cls=NumpyEncoder, indent=4)
                 print_success(f"Project '{project_to_delete['name']}' deleted successfully!")
-            except Exception as e:
+            except (OSError, PersistenceError) as e:
                 print_error(f"Error saving updated project file: {e}")
         else:
             print("Deletion cancelled.")
