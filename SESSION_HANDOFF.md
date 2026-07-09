@@ -2,8 +2,8 @@
 
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
-> **Last session**: Phase 2 foundation modules (A config, B exceptions pass 1,
-> C units cleanup) — **Phase 2 COMPLETE**.
+> **Last session**: Phase 2-B exceptions adoption (pass 2) — narrowed 27 bare
+> `except Exception` blocks across 5 modules + cli.py (78 → 53 remaining).
 > **Date**: 2026-07-09.
 
 ---
@@ -53,33 +53,55 @@ All three root-cause foundation modules from audit §4 are done. Per-module comm
 or AST test proving the fix, (3) a stale-literal audit (grep for the old pattern). All
 Phase 2 commits passed this bar.
 
+### Phase 2-B — exceptions.py adoption (pass 2, COMPLETE this session)
+
+Narrowed 27 bare `except Exception` blocks so genuine programming bugs
+(`AttributeError`/`KeyError`/`NameError`) propagate instead of being masked as user errors.
+Total across `src/`: **78 → 53**. Per-commit:
+
+| Commit | What |
+|--------|------|
+| `8ace76b` | **Prerequisite migrations + cli.py solve handler.** `indeterminate_solver.py:75` unknown-beam-type `ValueError` → `ValidationError`; `area_solver.py` 10 section-dimension `ValueError` → `SectionGeometryError` (found to be reachable via stepped_solver inside the solve try-block — migrating first avoided a regression). cli.py solve handler (~1676) → `(ValidationError, SingularStiffnessMatrixError, AltruxIQError)`; first `PersistenceError` adoption at `save_projects_to_disk` (~602) → `(OSError, PersistenceError)`. AST-only (cli.py). |
+| `3ecf7ff` | **inputs.py** fully cleared (5 → 0): 4 `manage_loads` float-parsing guards → `(ValueError, EOFError)`; `area_from_section` guard → `(SectionGeometryError,)` — the end-to-end payoff of the area_solver migration. AST + runtime hierarchy verified. |
+| `0a41a89` | **Persistence branch complete + date guards.** `delete_project` (~506) → `(OSError, PersistenceError)` (PersistenceError now at both write sites); `load_project:232` + `print_loaded_project_summary:382` → `(ValueError, TypeError)` (these guard `datetime.fromisoformat`, not persistence — honest narrowing rather than forcing PersistenceError). `load_projects_from_disk` was already well-narrowed, left alone. cli.py 24 → 21. AST-only. |
+| `4091624` | **Quick-wins bundle** — cleared 3 modules: `export_helper.py` (3 → 0: import→`ImportError`, HTML/PNG writes→`OSError`), `main_plotting.py` (2 → 0: import fallbacks→`ImportError`), `Menus.py` (2 → 0: `isatty()`→`AttributeError`, ANSI writes→`(OSError, ValueError)`). Menus.py runtime-tested (isatty AttributeError path returns False as before). |
+
 ---
 
 ## 3. What REMAINS to do
 
-### Phase 2-B — exceptions.py adoption (pass 2+ of N, IN PROGRESS)
+### Phase 2-B — exceptions.py adoption (pass 3+ of N, IN PROGRESS)
 
-Pass 1 (above) established the hierarchy and migrated the two solver clusters. The broader
-goal is narrowing the **78 bare `except Exception` blocks** across `src/` so genuine
-programming bugs (`AttributeError`/`KeyError`/`NameError`) stop being masked as user errors.
-Distribution: `pyvista_plotting.py` 30 · `cli.py` 26 · `moi_solver.py` 0 (done) ·
-`inputs.py` 5 · `export_helper.py` 3 · `main_plotting.py` 2 · `Menus.py` 2 · others.
+Pass 2 (above) cleared 5 modules + 7 cli.py handlers (78 → 53). Remaining distribution:
+`pyvista_plotting.py` 30 · `cli.py` 21 · `beam_plot.py` 1 · `plotting_helper.py` 1.
+
+**DONE in pass 2 (do not redo):** cli.py solve handler + save/delete persistence
+(`8ace76b`, `0a41a89`); inputs.py all 5 (`3ecf7ff`); export_helper.py /
+main_plotting.py / Menus.py all (`4091624`); `PersistenceError` now adopted at both
+disk-write sites. `PersistenceError` is still never *raised* anywhere — only caught —
+which is fine for now (the save path delegates to `json.dump`, which raises `OSError`).
 
 **Recommended next passes (in order):**
 
-1. **cli.py solve handler** (`src/ui/cli.py:~1676`, "Error solving beam"). Narrow from
-   `except Exception` to `(ValidationError, SingularStiffnessMatrixError, AltruxIQError)`
-   so the new hierarchy from pass 1 actually starts filtering at the CLI layer. AST-only
-   verification (cli.py can't runtime-import). This is the single highest-value handler.
-2. **inputs.py** — 5 blocks: 4 `manage_loads` float-parsing (`float(input())` → catch
-   `ValueError` specifically) at lines ~537/584/624/675, plus 1 `area_from_section` call
-   at ~1006. Runtime-testable.
+1. **Continue cli.py** — 21 blocks remain (was 26, narrowed to 21). Mostly nested menu
+   handlers in `run_extended_menu()`. AST-only verification. Triage each in context before
+   narrowing — some may be intentional broad guards around `input()`/display loops.
+2. **beam_plot.py / plotting_helper.py** — 1 block each, likely quick wins. Runtime-testable
+   (plotting modules import cleanly). Verify what each guards before narrowing.
 3. **pyvista_plotting.py** — 30 blocks but mostly intentional VTK-callback defense (17 are
    `_log.debug`, 11 are bare `pass`/default-value). Low priority; leave alone unless explicitly
    asked. Only the 2 `print_error` GIF/PNG export blocks (~1516/1522) are real candidates.
-4. **PersistenceError adoption** — `exceptions.py` defines `PersistenceError` but no code
-   raises it yet. Add it to the save/load paths in `cli.py` (`save_projects_to_disk` ~602,
-   `load_project` ~184, `delete_project` ~466) when those handlers are narrowed.
+
+**Lessons from pass 2 (carry forward):**
+- Before narrowing a handler, **trace what's reachable inside its try-block** — pass 2 found
+  `area_solver.py` `ValueError`s reachable via `stepped_solver` inside the solve handler;
+  migrating them first avoided a regression.
+- The handoff's line-number pointers are approximate; always read in context. Pass 2 found
+  the "~184 PersistenceError" pointer actually pointed at `fromisoformat` guards (a `ValueError`
+  class), not persistence.
+- After every Edit, re-read the changed lines before verifying — pass 2 caught an accidental
+  f-string prefix drop (`f"...{e}"` → `"...{e}"`) that would have silently broken error
+  display; `git show HEAD:file` confirms originals when in doubt.
 
 ### Phase 3 — Large refactors (DEFERRED, do NOT start without explicit approval)
 
@@ -124,14 +146,14 @@ Distribution: `pyvista_plotting.py` 30 · `cli.py` 26 · `moi_solver.py` 0 (done
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5,9,14.
 2. **At the start, ask the user this exact question** (they requested it):
-   > "Phase 2 (foundation modules) is complete. Where should we continue?
-   > - **(B-pass2) cli.py solve-handler narrowing** *(Recommended — single highest-value
-   >   `except Exception` block; makes the Phase 2-B exception hierarchy actually filter
-   >   bugs at the CLI layer. AST-only verification.)*
-   > - **(B-pass2) inputs.py block narrowing** *(5 blocks, runtime-testable: 4 manage_loads
-   >   float-parsing + 1 area_from_section call)*
-   > - **(Phase 3) ProjectState dataclass** *(large cli.py rewrite — needs explicit approval;
-   >   audit calls it highest-leverage but biggest scope)*
-   > - **Known-issue fix** *(e.g. num_points persistence, equilibrium check, indeterminate_solver
-   >   if/if/elif)*"
+   > "Phase 2-B pass 2 is complete (78 → 53 bare `except Exception`). Where next?
+   > - **(B-pass3) Continue cli.py** *(Recommended — 21 blocks remain, the largest remaining
+   >   module. AST-only verification. Triage each nested menu handler in context first.)*
+   > - **(B-pass3) beam_plot.py + plotting_helper.py** *(1 block each, runtime-testable quick
+   >   wins — clears two more modules)*
+   > - **(B-pass3) pyvista_plotting.py GIF/PNG export handlers** *(the 2 real candidates among
+   >   its 30 defensive VTK-callback blocks, ~lines 1516/1522)*
+   > - **(Phase 3) ProjectState dataclass** *(large cli.py rewrite — needs explicit approval)*
+   > - **Known-issue fix** *(num_points persistence, equilibrium check, indeterminate_solver
+   >     if/if/elif)*"
 3. Proceed per-module with checkpoints, same as Phase 1 & 2.
