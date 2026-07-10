@@ -26,6 +26,7 @@ from common.config import SOLVER
 from common.exceptions import (
     AltruxIQError,
     ValidationError,
+    SectionGeometryError,
     SingularStiffnessMatrixError,
     PersistenceError,
 )
@@ -649,7 +650,7 @@ def load_material_database():
     global Materials
     try:
         Materials = MaterialDatabase()
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, KeyError) as e:
         print_error(f"Error loading the materials database: {e}")
         time.sleep(3)
 
@@ -870,7 +871,7 @@ def _session_info():
         if not saved and current_project.get('saved_at'):
             try:
                 saved = fmt_datetime(datetime.datetime.fromisoformat(current_project['saved_at']))
-            except Exception:
+            except (ValueError, TypeError):
                 saved = None
     if project_state.get("has_unsaved_changes"):
         saved = None  # force the "unsaved — changes pending" badge
@@ -1522,7 +1523,7 @@ def run_extended_menu():
                                 beam_type, beam_length, A, B, 
                                 supports_list, formatted_loads, units=current_labels
                             )
-                        except Exception as e:
+                        except (ValueError, TypeError, OSError) as e:
                             print_error(f"Error plotting beam schematic: {e}")
                             time.sleep(2)
                     
@@ -1543,7 +1544,7 @@ def run_extended_menu():
                         beam_type, beam_length, A, B, 
                         supports_list, formatted_loads, units=current_labels
                     )
-                except Exception as e:
+                except (ValueError, TypeError, OSError) as e:
                     print_error(f"Error plotting beam schematic: {e}")
                     time.sleep(2)
 
@@ -1720,7 +1721,7 @@ def run_extended_menu():
                             units=current_labels
                         )
         
-                    except Exception as e:
+                    except (ValueError, TypeError) as e:
                         print_error(f"Error displaying analysis results: {e}")
                         time.sleep(2)
                         continue
@@ -1766,7 +1767,7 @@ def run_extended_menu():
                             units=current_labels
                         )
         
-                    except Exception as e:
+                    except (ValueError, TypeError) as e:
                         print_error(f"Error calculating deflection: {e}")
                         time.sleep(2)
                         continue
@@ -1885,7 +1886,7 @@ def run_extended_menu():
                             segments=segments
                         )
         
-                    except Exception as e:
+                    except (ValueError, TypeError, ZeroDivisionError, SectionGeometryError) as e:
                         print_error(f"Error in stress/F.O.S calculations: {e}")
                         time.sleep(2)
                         continue
