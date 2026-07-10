@@ -1513,13 +1513,13 @@ def _animation_export_menu(ap, result_key):
     if choice in ("1", "3"):
         try:
             saved.append(ap.export_gif(os.path.join(out_dir, f"{base}_{stamp}.gif")))
-        except Exception as e:
+        except (OSError, ImportError, RuntimeError) as e:
             print_error(f"GIF export failed: {e}")
             print_error("Install the backend with:  pip install imageio")
     if choice in ("2", "3"):
         try:
             saved.append(ap.export_png(os.path.join(out_dir, f"{base}_{stamp}.png")))
-        except Exception as e:
+        except (OSError, ImportError, RuntimeError) as e:
             print_error(f"PNG export failed: {e}")
     return [s for s in saved if s]
 
