@@ -2154,7 +2154,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, ZeroDivisionError, EOFError) as e:
                         print_error(f"Error plotting Combined Stress Plot: {e}")
                         time.sleep(2)
                         continue
@@ -2300,7 +2300,7 @@ def run_extended_menu():
                                 print_error("Invalid selection.")
                                 time.sleep(1)
 
-                        except Exception as e:
+                        except (ValueError, TypeError, OSError, EOFError, RuntimeError) as e:
                             print_error(f"Error in 3D FEA view: {e}")
                             time.sleep(2)
                             continue
@@ -2331,7 +2331,7 @@ def run_extended_menu():
                 
                 time.sleep(2)
                 
-            except Exception as e:
+            except (OSError, PersistenceError, EOFError) as e:
                 print_error(f"Error saving project: {e}")
                 time.sleep(2)
                 
@@ -2382,7 +2382,7 @@ def run_extended_menu():
                     segments=segments
                 )
     
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 print_error(f"Error generating recommendations: {e}")
                 time.sleep(2)
                 continue  
