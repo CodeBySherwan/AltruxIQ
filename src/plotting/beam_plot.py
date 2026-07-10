@@ -13,7 +13,7 @@ from plotting.plotting_helper import (
 from plotting import plot_theme as T
 try:
     from plotting.export_helper import present_plotly
-except Exception:                       # pragma: no cover
+except ImportError:                       # pragma: no cover
     from export_helper import present_plotly
 
 

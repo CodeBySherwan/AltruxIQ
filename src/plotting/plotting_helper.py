@@ -20,7 +20,7 @@ import numpy as np
 
 try:
     from plotting import plot_theme as T          # package import (real app)
-except Exception:                                  # pragma: no cover
+except ImportError:                                  # pragma: no cover
     import plot_theme as T                         # flat import (tests/preview)
 
 
