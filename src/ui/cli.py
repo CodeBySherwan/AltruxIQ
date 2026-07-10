@@ -8,7 +8,7 @@ and project save/load functionality.
 """
 # modules
 
-from core.state import state
+
 import json
 import os
 import sys
@@ -23,6 +23,7 @@ _src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _src not in sys.path:
     sys.path.insert(0, _src)
 from common.paths import ensure_src_in_path, PROJECTS_FILE
+from core.state import state
 from common.config import SOLVER
 from common.exceptions import (
     AltruxIQError,
