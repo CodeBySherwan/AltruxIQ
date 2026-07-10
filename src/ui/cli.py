@@ -1912,7 +1912,7 @@ def run_extended_menu():
                     try:
                         print_success("Processing reaction-forces schematic (Plotly)…")
                         plot_reaction_diagram(Reactions, units=current_labels)
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError) as e:
                         print_error(f"Error plotting reaction diagram: {e}")
                         time.sleep(2)
                         continue
@@ -1927,7 +1927,7 @@ def run_extended_menu():
                                 print_success("Processing shear force plot (Plotly)…")
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'SFD',units=current_labels)
                         
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
@@ -1942,7 +1942,7 @@ def run_extended_menu():
                                 print_success("Processing bending moment plot (Plotly)…")
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'BMD',units=current_labels)
  
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
@@ -1957,7 +1957,7 @@ def run_extended_menu():
                                 print_success("Processing Shear Force/Bending Moment Plots(Plotly):")
                                 Plotly_sfd_bmd(X_Field, Total_ShearForce, Total_BendingMoment, beam_length,'Both',units=current_labels)
 
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
@@ -1982,7 +1982,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Error plotting Shear-Stress Plot: {e}")
                         time.sleep(2)
                 elif sub_choice == '6':  # Bending Stress
@@ -2002,7 +2002,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Error plotting Bending-Stress Plot: {e}")
                         time.sleep(2)
                 elif sub_choice == '7':  # Deflection
@@ -2022,7 +2022,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Error plotting Deflection Plot: {e}")
                         time.sleep(2)
                         continue
@@ -2067,7 +2067,7 @@ def run_extended_menu():
                             time.sleep(2)
                             continue
 
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
                         time.sleep(2)
                         continue
@@ -2088,7 +2088,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Error plotting Axial Force Plot: {e}")
                         time.sleep(2)
                         continue
@@ -2109,7 +2109,7 @@ def run_extended_menu():
                             print_error("Invalid style selection.")
                             time.sleep(2)
                             continue
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Error plotting Axial Displacement Plot: {e}")
                         time.sleep(2)
                         continue
