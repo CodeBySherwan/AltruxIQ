@@ -84,7 +84,7 @@ Total across `src/`: **53 → 30**.
 
 **Recommended next steps:**
 
-1. **pyvista_plotting.py** — 30 blocks remain. **NOTE:** Mostly intentional VTK-callback defense (17 are `_log.debug`, 11 are bare `pass`/default-value). Low priority; leave alone unless explicitly asked. Only the 2 `print_error` GIF/PNG export blocks (~1516/1522) are real candidates.
+1. **pyvista_plotting.py** — 28 blocks remain. **NOTE:** These remaining blocks are entirely intentional VTK-callback defense (e.g. `_log.debug` handlers inside VTK events, or bare `pass`/default-value logic to prevent the C++ event loop from crashing on bad data). Do not touch them. The two genuine targets (GIF/PNG export blocks) were cleared in pass 4. Phase 2-B is now 100% complete for all actionable blocks.
 2. **Phase 3 — known-issue fixes.** See "Known-issue fixes" below.
 3. **Phase 3 — `ProjectState` dataclass refactor.** See "ProjectState dataclass refactor" below.
 
