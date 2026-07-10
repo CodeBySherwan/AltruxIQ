@@ -70,27 +70,23 @@ Total across `src/`: **78 → 53**. Per-commit:
 
 ## 3. What REMAINS to do
 
-### Phase 2-B — exceptions.py adoption (pass 3+ of N, IN PROGRESS)
+### Phase 2-B — exceptions.py adoption (COMPLETE except for PyVista)
 
-Pass 2 (above) cleared 5 modules + 7 cli.py handlers (78 → 53). Remaining distribution:
-`pyvista_plotting.py` 30 · `cli.py` 21 · `beam_plot.py` 1 · `plotting_helper.py` 1.
+Pass 3 cleared all 21 remaining blocks in `cli.py` across 3 commits (`fe4003a`, `ea402dd`, `f03c5ad`).
+- **Added `SectionGeometryError` to cli.py imports** — payoff of the pass 2 `area_solver` migration.
+- **Added `EOFError`** — all postprocessing handlers that prompt for style choice now catch `EOFError` for piped/closed stdin.
+- **Added `RuntimeError` on PyVista wrapper** — VTK/GPU windowing failures surface as `RuntimeError`.
+- **Added `PersistenceError` on save handler** — completes the adoption at all 3 persistence-related sites in cli.py.
 
-**DONE in pass 2 (do not redo):** cli.py solve handler + save/delete persistence
-(`8ace76b`, `0a41a89`); inputs.py all 5 (`3ecf7ff`); export_helper.py /
-main_plotting.py / Menus.py all (`4091624`); `PersistenceError` now adopted at both
-disk-write sites. `PersistenceError` is still never *raised* anywhere — only caught —
-which is fine for now (the save path delegates to `json.dump`, which raises `OSError`).
+Pass 4 cleared the final quick wins in `beam_plot.py` and `plotting_helper.py` (both were import fallbacks narrowed to `ImportError`).
 
-**Recommended next passes (in order):**
+Total across `src/`: **53 → 30**. 
 
-1. **Continue cli.py** — 21 blocks remain (was 26, narrowed to 21). Mostly nested menu
-   handlers in `run_extended_menu()`. AST-only verification. Triage each in context before
-   narrowing — some may be intentional broad guards around `input()`/display loops.
-2. **beam_plot.py / plotting_helper.py** — 1 block each, likely quick wins. Runtime-testable
-   (plotting modules import cleanly). Verify what each guards before narrowing.
-3. **pyvista_plotting.py** — 30 blocks but mostly intentional VTK-callback defense (17 are
-   `_log.debug`, 11 are bare `pass`/default-value). Low priority; leave alone unless explicitly
-   asked. Only the 2 `print_error` GIF/PNG export blocks (~1516/1522) are real candidates.
+**Recommended next steps:**
+
+1. **pyvista_plotting.py** — 30 blocks remain. **NOTE:** Mostly intentional VTK-callback defense (17 are `_log.debug`, 11 are bare `pass`/default-value). Low priority; leave alone unless explicitly asked. Only the 2 `print_error` GIF/PNG export blocks (~1516/1522) are real candidates.
+2. **Phase 3 — known-issue fixes.** See "Known-issue fixes" below.
+3. **Phase 3 — `ProjectState` dataclass refactor.** See "ProjectState dataclass refactor" below.
 
 **Lessons from pass 2 (carry forward):**
 - Before narrowing a handler, **trace what's reachable inside its try-block** — pass 2 found
