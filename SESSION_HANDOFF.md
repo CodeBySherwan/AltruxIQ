@@ -83,7 +83,8 @@ Total across `src/`: **53 → 30**.
 
 **Recommended next steps:**
 
-1. **Phase 3 — `ProjectState` dataclass refactor.** See "ProjectState dataclass refactor" below.
+1. **Module decomposition** (audit §3): split `Menus.py`/`inputs.py`/`cli.py` into `ui/console/` + `ui/beam/` packages. Mechanical but large.
+2. **Solver registry** (audit §5): replace `if beam_type ==` chains with a `@register` decorator.
 
 **Lessons from pass 2 (carry forward):**
 - Before narrowing a handler, **trace what's reachable inside its try-block** — pass 2 found
@@ -98,9 +99,7 @@ Total across `src/`: **53 → 30**.
 
 ### Phase 3 — Large refactors (DEFERRED, do NOT start without explicit approval)
 
-- **`core/state.py` — ProjectState dataclass** (audit §4.5): replaces cli.py's ~30 globals.
-  Audit calls this the "single highest-leverage change" but it's a large `cli.py` rewrite.
-  Only attempt after Phase 2-B is further along + a test harness exists.
+- ~~**`core/state.py` — ProjectState dataclass** (audit §4.5): replaces cli.py's ~30 globals.~~ (COMPLETED)
 - **Module decomposition** (audit §3): split `Menus.py`/`inputs.py`/`cli.py` into
   `ui/console/` + `ui/beam/` packages. Mechanical but large.
 - **Solver registry** (audit §5): replace `if beam_type ==` chains with a `@register` decorator.
