@@ -112,13 +112,11 @@ Total across `src/`: **53 → 30**.
 - **PyVista Stepped Bar**: `_build_beam_mesh()` uses single shape/section_dims; per-segment
   step-changes not rendered. Needs per-segment mesh stitching.
 
-### Known minor issues (not crashes, low priority)
-- `display_analysis_results()` equilibrium check only sums Va+Vb for Simple beams.
-- `indeterminate_solver._build_supports()` uses `if`/`if`/`elif` (not `if`/`elif`/`elif`)
-  for Simple vs Overhanging — works by coincidence, latent risk.
-- `num_points` not persisted to saved projects despite the Bug-13 globals fix (separate issue).
-- `moi_solver.print_derived_properties()` (non-tbeam path) still hardcodes "m²"/"m³" strings
-  and ignores its `units` param — pre-existing display inconsistency, left intentionally in 2-C.
+### Known minor issues (RESOLVED in Phase 3)
+- ~~`display_analysis_results()` equilibrium check only sums Va+Vb for Simple beams.~~ (Fixed)
+- ~~`indeterminate_solver._build_supports()` uses `if`/`if`/`elif` (not `if`/`elif`/`elif`) for Simple vs Overhanging — works by coincidence, latent risk.~~ (Fixed)
+- ~~`num_points` not persisted to saved projects despite the Bug-13 globals fix.~~ (Fixed)
+- ~~`moi_solver.print_derived_properties()` (non-tbeam path) still hardcodes "m²"/"m³" strings and ignores its `units` param.~~ (Fixed)
 
 ---
 
