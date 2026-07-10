@@ -38,14 +38,18 @@ def print_result(title, value, unit, precision=6, color='green'):
     print(colored("└" + "─"*62, color, attrs=['bold']))
     print("")
 
-def print_derived_properties(Ix, c, A,units=None):
+def print_derived_properties(Ix, c, A, units=None):
     """Print derived engineering properties: Se, rg (exact for all sections)."""
-    Se   = Ix / c                   # Elastic section modulus (m³)
-    r_g  = np.sqrt(Ix / A)          # Radius of gyration (m)
+    if units is None:
+        from common.units import default_units
+        units = default_units()
+        
+    Se   = Ix / c                   # Elastic section modulus
+    r_g  = np.sqrt(Ix / A)          # Radius of gyration
     print(colored("┌─ DERIVED ENGINEERING PROPERTIES " + "─"*29, 'magenta', attrs=['bold']))
-    print(colored(f"│ Cross-sectional Area (A):          {A:.6e} m²", 'magenta'))
-    print(colored(f"│ Elastic Section Modulus (Se=Ix/c): {Se:.6e} m³", 'magenta'))
-    print(colored(f"│ Radius of Gyration (r=√(Ix/A)):    {r_g:.6e} m", 'magenta'))
+    print(colored(f"│ Cross-sectional Area (A):          {A:.6e} {units['area']}", 'magenta'))
+    print(colored(f"│ Elastic Section Modulus (Se=Ix/c): {Se:.6e} {units['length']}³", 'magenta'))
+    print(colored(f"│ Radius of Gyration (r=√(Ix/A)):    {r_g:.6e} {units['length']}", 'magenta'))
     print(colored("└" + "─"*62, 'magenta', attrs=['bold']))
     print("")
 

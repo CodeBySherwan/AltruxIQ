@@ -39,7 +39,7 @@ def _build_supports(beam_type: str, beam_length: float, supports: list) -> list:
         B = supports[1]["pos"]
         return [Support(A, (1, 1, 0)), Support(B, (0, 1, 0))]
 
-    if beam_type == "Overhanging Beam":
+    elif beam_type == "Overhanging Beam":
         # Supports list contains support A and support B positions
         A = supports[0]["pos"]
         B = supports[1]["pos"]

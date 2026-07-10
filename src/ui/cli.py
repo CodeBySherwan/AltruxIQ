@@ -196,7 +196,7 @@ def load_project():
     global elastic_modulus, selected_material, density, yield_strength, ultimate_strength, poisson_ratio, shear_yield_strength
     global pointloads, distributedloads, momentloads, triangleloads
     global beam_type, support_types , current_unit_system, supports_list
-    global segments, AxialForce, AxialDisplacement
+    global segments, AxialForce, AxialDisplacement, num_points
     
     load_projects_from_disk()
 
@@ -521,7 +521,7 @@ def save_project():
     """
     Save or update a project in memory, and persist later to disk.
     """
-    global beam_storage, current_project, project_state, beam_type, support_types
+    global beam_storage, current_project, project_state, beam_type, support_types, num_points
     
     base_name = input(colored("Enter a name for this project ➔ ", 'cyan')).strip()
 

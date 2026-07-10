@@ -1235,7 +1235,7 @@ def display_analysis_results(beam_type, shape, beam_length, A=None, B=None,
     ui_close('green')
 
     # ---- Equilibrium verification ---------------------------------------
-    v_sum = (Va or 0) + (Vb if beam_type == "Simple" else 0)
+    v_sum = (Va or 0) + (Vb or 0)
     h_sum = (Ha or 0)
     print("\n")
     ui_open("EQUILIBRIUM AUDIT  (\u03a3F = 0, \u03a3M = 0)", 'yellow')
