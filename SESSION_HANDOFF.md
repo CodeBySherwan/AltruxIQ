@@ -2,9 +2,8 @@
 
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
-> **Last session**: Phase 2-B exceptions adoption (pass 2) — narrowed 27 bare
-> `except Exception` blocks across 5 modules + cli.py (78 → 53 remaining).
-> **Date**: 2026-07-09.
+> **Last session**: Phase 2-B exceptions adoption completed (all actionable `except Exception` narrowed). Phase 3 known minor issues resolved.
+> **Date**: 2026-07-10.
 
 ---
 
@@ -84,9 +83,7 @@ Total across `src/`: **53 → 30**.
 
 **Recommended next steps:**
 
-1. **pyvista_plotting.py** — 28 blocks remain. **NOTE:** These remaining blocks are entirely intentional VTK-callback defense (e.g. `_log.debug` handlers inside VTK events, or bare `pass`/default-value logic to prevent the C++ event loop from crashing on bad data). Do not touch them. The two genuine targets (GIF/PNG export blocks) were cleared in pass 4. Phase 2-B is now 100% complete for all actionable blocks.
-2. **Phase 3 — known-issue fixes.** See "Known-issue fixes" below.
-3. **Phase 3 — `ProjectState` dataclass refactor.** See "ProjectState dataclass refactor" below.
+1. **Phase 3 — `ProjectState` dataclass refactor.** See "ProjectState dataclass refactor" below.
 
 **Lessons from pass 2 (carry forward):**
 - Before narrowing a handler, **trace what's reachable inside its try-block** — pass 2 found
