@@ -938,6 +938,10 @@ PyVista is optional; `cli.py` catches `ImportError` and sets `_PYVISTA_AVAILABLE
 | — | Stepped solver distributed load boundaries not in mesh | Fixed internally | `stepped_solver._build_mesh()` |
 | — | O(n²) node lookup in stepped solver | Fixed internally | `stepped_solver` dict-based lookup |
 | — | `np.linalg.cond()` full SVD overhead in stepped solver | Fixed internally | replaced with `try/except LinAlgError` |
+| — | `display_analysis_results()` equilibrium check ignores `Vb` for non-Simple beams | Fixed | `Menus.py` |
+| — | `indeterminate_solver._build_supports()` uses unsafe `if`/`if`/`elif` chain | Fixed | `indeterminate_solver.py` |
+| — | `num_points` resolution parameter not persisted to JSON correctly | Fixed | `cli.py` (`load_project`/`save_project`) |
+| — | `moi_solver.print_derived_properties()` hardcodes metric units ("m²", "m³") | Fixed | `moi_solver.py` |
 
 ---
 
@@ -1222,6 +1226,12 @@ elif style == '2':
 
 - Always use `NumpyEncoder` when calling `json.dump()` for project files
 - `safe_serialize()` converts ndarray → list for project dict values
+
+### Exception Handling
+
+- **Never use bare `except Exception:`**. All error handling must be narrowed to specific tuples (e.g. `(ValueError, TypeError, OSError)`) so genuine programming bugs (`AttributeError`, `NameError`) propagate immediately.
+- Use `common.exceptions` for domain-specific errors (`AltruxIQError`, `ValidationError`, `SolverError`, `PersistenceError`).
+- In `pyvista_plotting.py`, VTK-callback defensive blocks are the only permitted exception to the narrowing rule, as they protect the C++ event loop from crashing Python.
 
 ---
 
