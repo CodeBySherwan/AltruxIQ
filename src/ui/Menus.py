@@ -1526,7 +1526,8 @@ def display_stress_analysis(beam_type, shape, selected_material, Ix, c, b,
 
 def display_engineering_recommendations(beam_type, shape, beam_length, selected_material,
                                       Ix, c, b, FOS=None, max_stress=None, max_defl=None,
-                                      span_ratio=None, yield_strength=None, segments=None):
+                                      span_ratio=None, yield_strength=None, segments=None,
+                                      units=METRIC_UNITS):
     """Commercial-grade structural design-check & recommendation report.
 
     Consolidates the strength and serviceability limit states into a single
@@ -1535,9 +1536,15 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     section optimisation, stability/secondary effects, and applicable codes.
 
     Units (SI): beam_length [m], Ix [m^4], c,b [m], max_stress/yield_strength [Pa],
-    max_defl [m], span_ratio [-], FOS [-].
+    max_defl [m], span_ratio [-], FOS [-]. Display values are divided by the
+    active ``units`` divisors so Imperial users see ft/in/ksi numbers.
     """
     clear_screen()
+
+    # Divisors for display conversion (single source: common.units.get_divisor)
+    len_div = get_divisor(units, 'length')
+    inertia_div = get_divisor(units, 'inertia')
+    sec_mod_div = get_divisor(units, 'sec_mod')
 
     # ------------------------------------------------------------------ #
     #  DERIVED ENGINEERING QUANTITIES
@@ -1610,21 +1617,21 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     ui_field("Structural system", f"{beam_type} Beam", 'blue', 'blue')
     if beam_type == "Stepped Bar" and segments:
         ui_field("Cross-section", "Varies along length", 'blue', 'blue')
-        ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
+        ui_field("Span length  L", f"{beam_length/len_div:.3f} {units['length']}", 'blue', 'blue')
         ui_field("Material", "Varies along length", 'blue', 'blue')
         ui_field("Moment of inertia  I", "Varies along length", 'blue', 'blue')
         ui_field("Section modulus  S", "Varies along length", 'blue', 'blue')
         ui_field("Section depth  (2c)", "Varies along length", 'blue', 'blue')
     else:
         ui_field("Cross-section", f"{shape}", 'blue', 'blue')
-        ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
+        ui_field("Span length  L", f"{beam_length/len_div:.3f} {units['length']}", 'blue', 'blue')
         ui_field("Material", f"{mat_name}" + (f"  (Fy = {yield_MPa:.0f} MPa)" if yield_MPa else ""), 'blue', 'blue')
         if Ix is not None:
-            ui_field("Moment of inertia  I", f"{Ix:.4e} m\u2074", 'blue', 'blue')
+            ui_field("Moment of inertia  I", f"{Ix/inertia_div:.4e} {units['inertia']}", 'blue', 'blue')
         if section_modulus:
-            ui_field("Section modulus  S", f"{section_modulus:.4e} m\u00b3", 'blue', 'blue')
+            ui_field("Section modulus  S", f"{section_modulus/sec_mod_div:.4e} {units['sec_mod']}", 'blue', 'blue')
         if depth:
-            ui_field("Section depth  (2c)", f"{depth:.4f} m", 'blue', 'blue')
+            ui_field("Section depth  (2c)", f"{depth/len_div:.4f} {units['length']}", 'blue', 'blue')
     ui_blank('blue')
     ui_close('blue')
 
@@ -1717,7 +1724,7 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     if FOS is not None and FOS < TARGET_FOS and section_modulus:
         s_req = section_modulus * (TARGET_FOS / FOS)
         inc = (s_req / section_modulus - 1.0) * 100.0
-        p1.append(f"Raise section modulus to S \u2265 {s_req:.3e} m\u00b3 "
+        p1.append(f"Raise section modulus to S \u2265 {s_req/sec_mod_div:.3e} {units['sec_mod']} "
                   f"(+{inc:.0f}%) to reach FoS = {TARGET_FOS:.2f}")
         if shape in ("I-beam", "T-beam"):
             p1.append("Increase web height (most effective) or flange area")
@@ -1734,7 +1741,7 @@ def display_engineering_recommendations(beam_type, shape, beam_length, selected_
     if dc_defl is not None and dc_defl > 1.0 and Ix:
         i_req = Ix * dc_defl
         inc = (dc_defl - 1.0) * 100.0
-        p2.append(f"Raise moment of inertia to I \u2265 {i_req:.3e} m\u2074 "
+        p2.append(f"Raise moment of inertia to I \u2265 {i_req/inertia_div:.3e} {units['inertia']} "
                   f"(+{inc:.0f}%) to satisfy L/360")
         if beam_type == "Simple":
             p2.append("Or add an intermediate support to roughly quarter the deflection")

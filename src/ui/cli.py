@@ -2304,7 +2304,8 @@ def run_extended_menu():
                     max_defl=max_defl,
                     span_ratio=span_ratio,
                     yield_strength=state.yield_strength if 'yield_strength' in globals() else None,
-                    segments=state.segments
+                    segments=state.segments,
+                    units=state.current_labels
                 )
     
             except (ValueError, TypeError) as e:
