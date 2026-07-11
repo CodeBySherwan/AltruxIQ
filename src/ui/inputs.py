@@ -1011,11 +1011,15 @@ def define_stepped_segments(unit_system="Metric", units=None):
         # Material selection from library
         print("")
         print(colored("┌─ SELECT MATERIAL FOR THIS SEGMENT ─" + "─"*20, 'magenta', attrs=['bold']))
-        
-        from ui.cli import select_material, load_material_database, Materials
-        if Materials is None:
+
+        # Lazy import: select_material / load_material_database still live in
+        # ui.cli (to be moved to ui/materials/selector.py in P3). Materials is
+        # no longer a cli.py module global — it lives on state.Materials.
+        from core.state import state
+        from ui.cli import select_material, load_material_database
+        if state.Materials is None:
             load_material_database()
-            
+
         selected_mat = select_material(unit_system, units)
         if selected_mat is None:
             print_error("Material selection is required for segment.")
