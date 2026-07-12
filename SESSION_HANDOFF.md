@@ -102,7 +102,17 @@ hardcoded SI length/inertia/sec-mod literals in the function body.
 
 ---
 
-### P1 — Dead code / stale references (fast, no behavior change)
+### P1 — Dead code / stale references (fast, no behavior change)  ✅ DONE & VERIFIED (2026-07-11)
+
+**Completed**: P1-1, P1-2, P1-3, P1-5. **Deferred**: P1-4 (the `run.py`
+entry-point refactor — handoff flagged it as "needs explicit approval, changes
+the launch contract"; revisit when the user is ready). Commit group on
+`fix/p0-correctness-bugs`: `chore(cleanup): remove dead imports + adopt
+pathlib in pyvista_plotting` and `refactor(units): standardize on
+METRIC_UNITS/IMPERIAL_UNITS everywhere`.
+
+**Bonus**: `pyvista_plotting.py` also had an unused `import sys` (separate
+from P1-1's files) — removed during P1-3.
 
 #### P1-1 — Unused pre-centralization imports
 
@@ -523,8 +533,10 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0 is done.** Next recommended step is **P1 — dead-code / stale-reference
-   cleanup** (4 small items, no behavior change, fast). Then **P2** (`units.py`
-   API cleanup), then the larger structural program **P3 → P4 → P5**.
+2. **P0 and P1 are done.** Next recommended step is **P2 — `units.py` API
+   cleanup** (collapse `to_si`/`system_multiplier` duplication; small,
+   non-breaking). Then the larger structural program **P3 → P4 → P5**.
    Confirm with the user which tier to start before proceeding — same
    per-module checkpoint convention as prior phases.
+   Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
+   approval since it changes the launch contract.
