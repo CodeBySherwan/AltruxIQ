@@ -5,9 +5,9 @@ Commercial-grade 3D FEA visualisations for AltruxIQ.
 """
 
 import os
-import sys
 import datetime
 import logging
+from pathlib import Path
 import numpy as np
 
 _log = logging.getLogger("altruxiq.pyvista")
@@ -53,8 +53,8 @@ _DEFAULT_FPS       = 24          # Animation playback speed
 _DEFAULT_N_FRAMES  = 60          # Animation frame count
 
 # Centralized via common.paths (single source of truth for on-disk locations).
-_SCREENSHOT_DIR    = str(SCREENSHOTS_DIR)
-_EXPORT_DIR        = str(EXPORTS_DIR)
+# SCREENSHOTS_DIR / EXPORTS_DIR are already pathlib.Path objects — used
+# directly below, no str() round-trip needed.
 
 COLOR_MAX        = "red"
 COLOR_MIN        = "blue"
@@ -78,21 +78,19 @@ _HRULE          = "\u2500" * 22           # divider rule for HUD cards
 # INTERNAL HELPERS
 # ===========================================================================
 
-def _ensure_screenshot_dir() -> str:
-    path = os.path.normpath(_SCREENSHOT_DIR)
-    os.makedirs(path, exist_ok=True)
-    return path
+def _ensure_screenshot_dir() -> Path:
+    SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    return SCREENSHOTS_DIR
 
 def _timestamp() -> str:
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-def _make_screenshot_path(name: str) -> str:
-    return os.path.join(_ensure_screenshot_dir(), f"{name}_{_timestamp()}.png")
+def _make_screenshot_path(name: str) -> Path:
+    return _ensure_screenshot_dir() / f"{name}_{_timestamp()}.png"
 
-def _ensure_export_dir() -> str:
-    path = os.path.normpath(_EXPORT_DIR)
-    os.makedirs(path, exist_ok=True)
-    return path
+def _ensure_export_dir() -> Path:
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    return EXPORTS_DIR
 
 def _downsample_for_visuals(X_Field: np.ndarray, scalar_field: np.ndarray, target_fraction: float = 0.5):
     n_original = len(X_Field)

@@ -2,11 +2,11 @@
 
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
-> **Last session**: Full architecture audit of `paths.py`/`units.py` adoption,
-> `cli.py`/`Menus.py`/`inputs.py` modularity, and future-proofing readiness.
-> Findings below are prioritized — fix top-to-bottom, do not skip ahead to
-> structural refactors while correctness bugs are open.
-> **Date**: 2026-07-10.
+> **Last session**: P0 correctness bugs **DONE**; P1 dead-code/stale-reference
+> cleanup **DONE** (P1-1/2/3/5, plus bonus dead `import sys` in
+> `pyvista_plotting.py`). Branch `fix/p0-correctness-bugs` holds both batches
+> (5 commits). Ready to proceed to **P2** (`units.py` API cleanup).
+> **Date**: 2026-07-11.
 
 ---
 
@@ -55,91 +55,64 @@ Work top-to-bottom. **P0 items are correctness bugs — fix these before any
 structural refactor**, since refactor plans should not be built on top of broken
 code paths. P1 is fast cleanup. P2+ are the structural/scalability program.
 
-### P0 — Correctness bugs (fix first, minutes-to-an-hour each)
+### P0 — Correctness bugs  ✅ DONE & VERIFIED (2026-07-11)
 
-#### P0-1 — CRASH: `ui/inputs.py` imports a global that no longer exists
+#### P0-1 — CRASH: `ui/inputs.py` imports a global that no longer exists  ✅ FIXED
 
-**File**: `src/ui/inputs.py`, inside `define_stepped_segments()`
+**File**: `src/ui/inputs.py`, inside `define_stepped_segments()`.
 
-```python
-from ui.cli import select_material, load_material_database, Materials
-if Materials is None:
-    load_material_database()
-```
+**Fix applied** (`src/ui/inputs.py`, material-selection block): replaced
+`from ui.cli import select_material, load_material_database, Materials` with
+`from core.state import state` + `from ui.cli import select_material,
+load_material_database`, and changed the guard from `if Materials is None:` to
+`if state.Materials is None:`. `select_material`/`load_material_database` stay
+imported from `ui.cli` for now (structural move deferred to P3
+`ui/materials/selector.py`, which closes the root cause permanently).
 
-**Root cause**: `Materials` was migrated from a `cli.py` module-level global to
-`state.Materials` (`core/state.py::ProjectState`) in an earlier session, but this
-call site was never updated. `from ui.cli import ... Materials` will raise
-`ImportError` the moment a Stepped Bar segment's material is defined — this is
-the **only** code path that assigns per-segment materials, so all Stepped Bar
-profile definition is currently broken.
+**Verified**: AST-walk confirms no `from ui.cli import ... Materials` remains;
+`ProjectState.Materials` exists and defaults to `None`; `MaterialDatabase()`
+constructs and loads 73 entries; the `state.Materials = MaterialDatabase()`
+assignment the guard performs works. `test_stepped_solver.py` regression suite
+still green (8/8).
 
-**Fix**:
-```python
-from core.state import state
-from database.materials_database import MaterialDatabase
-...
-if state.Materials is None:
-    state.Materials = MaterialDatabase()
-selected_mat = select_material(unit_system, units)   # select_material still importable from ui.cli for now
-```
+#### P0-2 — SILENT WRONG OUTPUT: `display_engineering_recommendations` ignores unit system  ✅ FIXED
 
-**Verify**: AST-walk `inputs.py` for `from ui.cli import` and confirm no name in
-the import list is a plain data attribute of `state`; runtime-construct a fake
-`ProjectState` and call the corrected block in isolation if `indeterminatebeam`
-is unavailable in-sandbox.
+**File**: `src/ui/Menus.py::display_engineering_recommendations` + `src/ui/cli.py` call site.
 
-**Note**: this is a symptom of `select_material` living in `cli.py` in the first
-place (see P2 module decomposition, `ui/materials/selector.py`) — the real fix
-is structural, this patch only stops the crash.
+**Scope note (expanded at fix time)**: the audit listed 4 hardcoded SI literals
+(span length, I, S, depth in the "MODEL & SECTION SUMMARY" block). Two more of
+the **same bug class** were found in the "PRIORITISED RECOMMENDED ACTIONS" block:
+the `s_req` (section-modulus target) and `i_req` (inertia target) recommendation
+strings also printed raw SI with hardcoded `m³`/`m⁴`. All 7 literals were fixed
+together — leaving the 2 recommendation-target strings in SI would have meant an
+Imperial user still gets wrong sizing targets.
 
----
+**Fix applied**:
+- Added `units=METRIC_UNITS` kwarg to the signature.
+- Added three divisors at function entry: `len_div`, `inertia_div`, `sec_mod_div`
+  via `get_divisor(units, ...)`.
+- Converted all 7 literals to `/div` + `units[...]` label (both the Stepped Bar
+  `beam_length` line and the non-stepped branch).
+- `cli.py` call site (`selection == '11'`) now passes `units=state.current_labels`.
 
-#### P0-2 — SILENT WRONG OUTPUT: `display_engineering_recommendations` ignores unit system
-
-**File**: `src/ui/Menus.py::display_engineering_recommendations`
-
-No `units` parameter exists on this function, and it hardcodes SI labels on SI
-values regardless of session unit system:
-
-```python
-ui_field("Span length  L", f"{beam_length:.3f} m", 'blue', 'blue')
-ui_field("Moment of inertia  I", f"{Ix:.4e} m\u2074", 'blue', 'blue')
-ui_field("Section modulus  S", f"{section_modulus:.4e} m\u00b3", 'blue', 'blue')
-ui_field("Section depth  (2c)", f"{depth:.4f} m", 'blue', 'blue')
-```
-
-Every sibling report function (`display_analysis_results`, `display_deflection_analysis`,
-`display_stress_analysis`) correctly threads `units=` and divides by
-`get_divisor(units, ...)`. This one was missed. **Impact**: an Imperial-mode user
-sees base-SI numbers mislabeled with `"m"` in the Design-Check report — this is a
-reported-value correctness bug, not a formatting nit.
-
-**Fix**:
-```python
-def display_engineering_recommendations(beam_type, shape, beam_length, selected_material,
-                                          Ix, c, b, FOS=None, max_stress=None, max_defl=None,
-                                          span_ratio=None, yield_strength=None, segments=None,
-                                          units=METRIC_UNITS):
-    len_div = get_divisor(units, 'length')
-    inertia_div = get_divisor(units, 'inertia')
-    sec_mod_div = get_divisor(units, 'sec_mod')
-    ...
-    ui_field("Span length  L", f"{beam_length/len_div:.3f} {units['length']}", 'blue', 'blue')
-    ui_field("Moment of inertia  I", f"{Ix/inertia_div:.4e} {units['inertia']}", 'blue', 'blue')
-    ui_field("Section modulus  S", f"{section_modulus/sec_mod_div:.4e} {units['sec_mod']}", 'blue', 'blue')
-    ui_field("Section depth  (2c)", f"{depth/len_div:.4f} {units['length']}", 'blue', 'blue')
-```
-
-Then in `cli.py`, `selection == '11'` call site, add `units=state.current_labels`
-to the `display_engineering_recommendations(...)` call.
-
-**Verify**: runtime-call with `units=IMPERIAL_UNITS` and confirm printed numbers
-change from the SI-value baseline (they currently won't).
+**Verified**: runtime test proves a 6.0 m beam prints `6.000 m` in Metric and
+`19.685 ft` in Imperial (previously both printed `6.000 m`); section modulus
+`3e-5 m³` prints `3.00e-05 m³` vs `1.83 in³`. AST audit confirms zero remaining
+hardcoded SI length/inertia/sec-mod literals in the function body.
 
 ---
 
-### P1 — Dead code / stale references (fast, no behavior change)
+### P1 — Dead code / stale references (fast, no behavior change)  ✅ DONE & VERIFIED (2026-07-11)
+
+**Completed**: P1-1, P1-2, P1-3, P1-5. **Deferred**: P1-4 (the `run.py`
+entry-point refactor — handoff flagged it as "needs explicit approval, changes
+the launch contract"; revisit when the user is ready). Commit group on
+`fix/p0-correctness-bugs`: `chore(cleanup): remove dead imports + adopt
+pathlib in pyvista_plotting` and `refactor(units): standardize on
+METRIC_UNITS/IMPERIAL_UNITS everywhere`.
+
+**Bonus**: `pyvista_plotting.py` also had an unused `import sys` (separate
+from P1-1's files) — removed during P1-3.
 
 #### P1-1 — Unused pre-centralization imports
 
@@ -560,22 +533,10 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **At the start, ask the user this exact question**:
-   > "Architecture audit complete. Two correctness bugs found (P0-1: Stepped Bar
-   > material-selection crash; P0-2: Design-Check report ignores unit system).
-   > Recommended order:
-   > - **(P0) Fix both bugs now** *(minutes each, unblocks everything else —
-   >   strongly recommended first)*
-   > - **(P1) Dead-code/stale-reference cleanup** *(fast, no behavior change —
-   >   4 small items)*
-   > - **(P2) `units.py` API cleanup** *(small, non-breaking — collapse
-   >   `to_si`/`system_multiplier`)*
-   > - **(P3) Module decomposition** *(`cli.py`/`Menus.py`/`inputs.py` →
-   >   `console/`, `beam/`, `materials/`, `reports/`, `menus/`, `project/` —
-   >   large, do per-module with checkpoints)*
-   > - **(P4) Reusable common modules** *(`ProjectRepository`, `LiveClock`,
-   >   logging config)*
-   > - **(P5) Future-proofing** *(solver registry, plugin contract, settings/
-   >   config split — needed before adding frame2d/truss2d or a GUI)*
-   > Where would you like to start?"
-3. Proceed per-item with checkpoints, same as prior phases.
+2. **P0 and P1 are done.** Next recommended step is **P2 — `units.py` API
+   cleanup** (collapse `to_si`/`system_multiplier` duplication; small,
+   non-breaking). Then the larger structural program **P3 → P4 → P5**.
+   Confirm with the user which tier to start before proceeding — same
+   per-module checkpoint convention as prior phases.
+   Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
+   approval since it changes the launch contract.

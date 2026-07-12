@@ -55,8 +55,6 @@ Perf 3 [Moderate] — np.linalg.cond() (full SVD, O(n³)) was called on
 import numpy as np
 # pyrefly: ignore [missing-import]
 from scipy.linalg import solve, LinAlgError as _SciLinAlgError
-import os
-import sys
 
 from solver.area_solver import area_from_section
 from common.config import SOLVER

@@ -12,7 +12,8 @@ sec_mod, modulus, stress, density, distributed.
 
 This module supersedes the previously duplicated unit code in:
   - ``ui/Menus.py``    (METRIC_UNITS, IMPERIAL_UNITS, get_divisor)
-  - ``ui/cli.py``      (METRIC_LABELS, IMPERIAL_LABELS)
+  - ``ui/cli.py``      (former METRIC_LABELS / IMPERIAL_LABELS alias — removed,
+                        now imports METRIC_UNITS / IMPERIAL_UNITS directly)
   - ``ui/inputs.py``   (CONVERSION_TO_SI, hardcoded 16.01846/6.894757/0.006894757)
   - ``solver/moi_solver.py`` (get_moi_scale parallel engine — deleted)
   - ``plotting/main_plotting.py`` (_get_scale)
