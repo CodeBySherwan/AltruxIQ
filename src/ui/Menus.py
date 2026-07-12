@@ -241,7 +241,6 @@ from common.units import (
     get_divisor,
     from_si,
     to_si,
-    system_multiplier,
     get_scale,
     default_units,
     is_imperial,

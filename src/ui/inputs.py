@@ -6,9 +6,10 @@ import numpy as np
 # =============================
 # Unit Conversion — single source in `common.units`
 # =============================
-# `system_multiplier(system, qty)` is the drop-in replacement for the legacy
-# CONVERSION_TO_SI[system][qty] lookup that used to live here.
-from common.units import system_multiplier, default_units, UNIT_SYSTEMS, to_json
+# `to_si(system, qty)` returns the display→SI factor (omit value), or converts
+# a display value to SI when value is passed. Replaces the legacy
+# CONVERSION_TO_SI[system][qty] lookup + system_multiplier().
+from common.units import to_si, default_units, UNIT_SYSTEMS, to_json
 from common.config import SOLVER
 from common.exceptions import SectionGeometryError
 
@@ -213,7 +214,7 @@ def Beam_Classification():
 def Beam_Length(unit_system="Metric", units=None):
     """Prompt the user to enter the beam length."""
     if units is None: units = default_units()
-    multiplier = system_multiplier(unit_system, "length")
+    multiplier = to_si(unit_system, "length")
     beam_length_raw = ask_float("Enter beam length", unit=units['length'],
                                 minimum=0, exclusive_min=True)
     print("")
@@ -223,7 +224,7 @@ def Beam_Length(unit_system="Metric", units=None):
 def Beam_Supports(unit_system="Metric", units=None):
     """Prompt the user to define the beam supports."""
     if units is None: units = default_units()
-    multiplier = system_multiplier(unit_system, "length")
+    multiplier = to_si(unit_system, "length")
     A_raw = ask_float("Enter position of Pin Support A", unit=units['length'], minimum=0)
     A = A_raw * multiplier
     A_restraint = (1, 1, 0)
@@ -249,7 +250,7 @@ def define_continuous_supports(beam_length, unit_system="Metric", units=None):
     Returns a list of dicts: [{"pos": float, "dof": (0,1,0), "ky": None, "kx": None}, ...]
     """
     if units is None: units = default_units()
-    multiplier = system_multiplier(unit_system, "length")
+    multiplier = to_si(unit_system, "length")
     inv_multiplier = 1.0 / multiplier
     
     while True:
@@ -309,7 +310,7 @@ def define_continuous_supports(beam_length, unit_system="Metric", units=None):
 def define_custom_supports(beam_length, unit_system="Metric", units=None):
     """Interactive wizard for defining arbitrary support configurations."""
     if units is None: units = default_units()
-    multiplier = system_multiplier(unit_system, "length")
+    multiplier = to_si(unit_system, "length")
     inv_multiplier = 1.0 / multiplier
     
     while True:
@@ -369,12 +370,12 @@ def define_custom_supports(beam_length, unit_system="Metric", units=None):
                     elif s_type == '4':
                         dof = (0, 1, 0)
                         ky_raw = float(input(colored(f"Enter vertical spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
-                        ky = ky_raw * (system_multiplier(unit_system, "force") / multiplier)
+                        ky = ky_raw * (to_si(unit_system, "force") / multiplier)
                         has_y_restraint = True
                     elif s_type == '5':
                         dof = (1, 0, 0)
                         kx_raw = float(input(colored(f"Enter horizontal spring stiffness ({units['force']}/{units['length']}): ➔ ", 'cyan')))
-                        kx = kx_raw * (system_multiplier(unit_system, "force") / multiplier)
+                        kx = kx_raw * (to_si(unit_system, "force") / multiplier)
                         has_x_restraint = True
                     else:
                         print_error("Invalid choice.")
@@ -408,10 +409,10 @@ def manage_loads(unit_system="Metric", units=None, beam_type=None):
     dist_unit = f"{units['force']}/{units['length']}"
     
     # Grab multipliers for conversion to SI before saving
-    l_mult = system_multiplier(unit_system, "length")
-    f_mult = system_multiplier(unit_system, "force")
-    m_mult = system_multiplier(unit_system, "moment")
-    d_mult = system_multiplier(unit_system, "distributed")
+    l_mult = to_si(unit_system, "length")
+    f_mult = to_si(unit_system, "force")
+    m_mult = to_si(unit_system, "moment")
+    d_mult = to_si(unit_system, "distributed")
 
     loads = {
         "pointloads": [], "distributedloads": [], "momentloads": [], "triangleloads": []
@@ -869,7 +870,7 @@ def define_stepped_segments(unit_system="Metric", units=None):
     if units is None:
         units = default_units()
     
-    l_mult = system_multiplier(unit_system, "length")
+    l_mult = to_si(unit_system, "length")
     inv_len = 1.0 / l_mult
     
     # Local imports: kept inside the function to avoid a circular import with

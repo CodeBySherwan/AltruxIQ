@@ -57,8 +57,9 @@ DEFAULT_UNITS = METRIC_UNITS
 # One factor table that drives BOTH conversion engines
 # ---------------------------------------------------------------------------
 # Convention: 1 display-unit = FACTOR × SI-unit
-#   ⇒  SI_value     = display_value * FACTOR   (use to_si / system_multiplier)
+#   ⇒  SI_value     = display_value * FACTOR   (use to_si)
 #   ⇒  display_value = SI_value      / FACTOR   (use from_si / get_divisor)
+#   ⇒  bare FACTOR  = to_si(units, qty)        (omit value)
 # Reproduces the old Menus.get_divisor AND inputs.CONVERSION_TO_SI exactly,
 # adding 'distributed' to the divisor side and the remaining quantities
 # (length_small, modulus, stress, density, inertia, sec_mod) to the multiplier side.
@@ -122,9 +123,18 @@ def from_si(units_dict, quantity, value):
     return value / get_divisor(units_dict, quantity)
 
 
-def to_si(units_dict, quantity, value):
-    """Convert a value given in the active display unit into base SI."""
-    return value * _SI_FACTORS[_system_key(units_dict)].get(quantity, 1.0)
+def to_si(unit_system_or_units, quantity, value=None):
+    """Convert a display-unit value into base SI, or return the bare factor.
+
+    ``SI_value = display_value * FACTOR``. When ``value`` is omitted, returns
+    the factor itself — useful when a caller needs to fetch the multiplier once
+    and apply it to several values (e.g. a batch of inputs).
+
+    Accepts either a units dict or a system string ('Metric'/'Imperial'),
+    resolved through :func:`_system_key`.
+    """
+    factor = _SI_FACTORS[_system_key(unit_system_or_units)].get(quantity, 1.0)
+    return factor if value is None else value * factor
 
 
 # ---------------------------------------------------------------------------
@@ -158,14 +168,6 @@ def to_json(units_dict, quantity, value):
 def from_json(units_dict, quantity, value):
     """Convert a JSON-stored value back into the active display unit."""
     return value / _JSON_FACTORS[_system_key(units_dict)].get(quantity, 1.0)
-
-
-def system_multiplier(unit_system, quantity):
-    """display -> SI factor, keyed by the system string ('Metric'/'Imperial').
-
-    Drop-in replacement for the legacy ``inputs.CONVERSION_TO_SI[system][quantity]``.
-    """
-    return _SI_FACTORS[_system_key(unit_system)].get(quantity, 1.0)
 
 
 # ---------------------------------------------------------------------------
