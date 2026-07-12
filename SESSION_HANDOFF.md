@@ -3,10 +3,9 @@
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
 > **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
-> P2-1 (`units.py` API collapse) **DONE**. Branches: `fix/p0-correctness-bugs`
-> (P0+P1, merged to main & pushed), `refactor/p2-units-api-cleanup` (P2-1,
-> not yet merged). Ready for **P2-2** (optional `Quantity` enum) or **P3**
-> (module decomposition).
+> P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**. Branch
+> `refactor/p2-units-api-cleanup` holds both P2 commits (pending merge).
+> Ready for **P3** (module decomposition — the large structural program).
 > **Date**: 2026-07-12.
 
 ---
@@ -211,22 +210,26 @@ runtime tests pass (bare-factor mode, value mode, string+dict keys,
 round-trip symmetry with `get_divisor` for every quantity, `1.0` fallback
 preserved); stepped-solver regression 8/8.
 
-#### P2-2 — Optional: `Quantity` enum for typo-safety
+#### P2-2 — Optional: `Quantity` enum for typo-safety  ✅ DONE & VERIFIED (2026-07-12)
 
-Quantity keys are free-form strings (`'length_small'`, `'sec_mod'`). A typo
-(`'length-small'`) fails silently — `.get(quantity, 1.0)` returns `1.0` and
-produces a plausible-but-wrong number instead of an error.
-```python
-from enum import Enum
-class Quantity(str, Enum):
-    LENGTH = "length"; LENGTH_SMALL = "length_small"; FORCE = "force"
-    MOMENT = "moment"; AREA = "area"; INERTIA = "inertia"; SEC_MOD = "sec_mod"
-    MODULUS = "modulus"; STRESS = "stress"; DENSITY = "density"; DISTRIBUTED = "distributed"
-```
-`Quantity(str, Enum)` hashes identically to the equivalent string, so this is
-opt-in and non-breaking — existing string call sites keep working; new code can
-use `get_divisor(units, Quantity.LENGTH)` for autocomplete + typo protection.
-Low priority; do only if touching `units.py` for P2-1 anyway.
+**Fix applied**: added `Quantity(str, Enum)` covering all 11 quantities in
+`common/units.py`. Subclassing `str` keeps it backward-compatible — members
+hash and compare equal to the underlying string, so existing free-form call
+sites (`to_si(units, 'length')`) keep working unchanged. New code can opt in
+to `to_si(units, Quantity.LENGTH)` for autocomplete + typo protection.
+
+**Bonus over the original spec**: added a drift guard at module bottom that
+asserts `Quantity` members match `_SI_FACTORS` keys exactly — a future factor
+addition without a matching enum member (or vice versa) now fails loudly at
+import time, instead of re-introducing the silent-typo risk the enum exists
+to prevent. Verified the guard fires correctly on a synthetic mismatch.
+
+**Verified**: AST parse clean; 6 runtime tests pass (enum members exist,
+`str` equality/hash contract, string call sites unaffected, enum works
+through `to_si`/`get_divisor`, enum as dict key, drift guard in sync);
+all units-dependent modules import cleanly; stepped-solver regression 8/8.
+
+---
 
 ---
 
@@ -527,17 +530,14 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0, P1, and P2-1 are done.** Remaining options:
-   - **P2-2** — optional `Quantity` enum (low priority, opt-in typo-safety).
-   - **P3** — module decomposition (`cli.py`/`Menus.py`/`inputs.py` →
-     `console/`, `beam/`, `materials/`, `reports/`, `menus/`, `project/`).
-     Large; do per-module with checkpoints. Suggested order: `console/` first
-     (zero domain coupling, safest), then `materials/selector.py` (closes
-     P0-1's root cause permanently), then `beam/`, then `reports/`, then thin
-     out `cli.py` last.
-   - **P4** — reusable common modules (`ProjectRepository`, `LiveClock`,
-     logging config).
-   - **P5** — future-proofing (solver registry, plugin contract, settings/
-     config split — needed before frame2d/truss2d or a GUI).
+2. **P0, P1, and P2 are fully done.** Next is **P3 — module decomposition**
+   (`cli.py`/`Menus.py`/`inputs.py` → `console/`, `beam/`, `materials/`,
+   `reports/`, `menus/`, `project/`). Large; do per-module with checkpoints.
+   Suggested order: `console/` first (zero domain coupling, safest), then
+   `materials/selector.py` (closes P0-1's root cause permanently), then
+   `beam/`, then `reports/`, then thin out `cli.py` last.
+   Then **P4** (`ProjectRepository`, `LiveClock`, logging) and **P5**
+   (solver registry, plugin contract, settings/config split — needed before
+   frame2d/truss2d or a GUI).
    Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
    approval since it changes the launch contract.
