@@ -2,9 +2,10 @@
 
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
-> **Last session**: P0 correctness fixes — both bugs below are **DONE &
-> verified** (AST + runtime + stale-ref audit, stepped-solver regression suite
-> green). Ready to proceed to P1.
+> **Last session**: P0 correctness bugs **DONE**; P1 dead-code/stale-reference
+> cleanup **DONE** (P1-1/2/3/5, plus bonus dead `import sys` in
+> `pyvista_plotting.py`). Branch `fix/p0-correctness-bugs` holds both batches
+> (5 commits). Ready to proceed to **P2** (`units.py` API cleanup).
 > **Date**: 2026-07-11.
 
 ---
