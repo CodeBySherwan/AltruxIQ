@@ -20,6 +20,7 @@ This module supersedes the previously duplicated unit code in:
 Each of those now re-exports or calls into this module.
 """
 from collections import namedtuple
+from enum import Enum
 
 # ---------------------------------------------------------------------------
 # Display labels per quantity (canonical)
@@ -91,6 +92,33 @@ _SI_FACTORS = {
         'distributed': 14.5939,      # lbf/ft -> N/m
     },
 }
+
+
+class Quantity(str, Enum):
+    """Symbolic quantity keys for typo-safe unit lookups.
+
+    Subclassing ``str`` keeps it fully backward-compatible: a ``Quantity``
+    member hashes and compares equal to its underlying string, so existing
+    free-form call sites (``to_si(units, 'length')``) keep working unchanged.
+    New code can use ``to_si(units, Quantity.LENGTH)`` for autocomplete and
+    compile-time protection against typos like ``'length-small'`` (which would
+    otherwise silently fall through to the ``1.0`` default and produce a
+    plausible-but-wrong number).
+
+    Kept in sync with ``_SI_FACTORS`` — see the guard at module bottom.
+    """
+
+    LENGTH = "length"
+    LENGTH_SMALL = "length_small"
+    FORCE = "force"
+    MOMENT = "moment"
+    AREA = "area"
+    INERTIA = "inertia"
+    SEC_MOD = "sec_mod"
+    MODULUS = "modulus"
+    STRESS = "stress"
+    DENSITY = "density"
+    DISTRIBUTED = "distributed"
 
 
 def is_imperial(units_dict):
@@ -200,3 +228,17 @@ def get_scale(units):
         get_divisor(units, 'moment'),
         get_divisor(units, 'stress'),
     )
+
+
+# ---------------------------------------------------------------------------
+# Drift guard: Quantity enum must stay in lock-step with _SI_FACTORS keys.
+# Adding a factor without a matching enum member (or vice versa) would
+# re-introduce the silent-typo risk the enum exists to prevent.
+# ---------------------------------------------------------------------------
+_FACTOR_KEYS = set(_SI_FACTORS["Metric"].keys())
+_ENUM_KEYS = {q.value for q in Quantity}
+assert _FACTOR_KEYS == _ENUM_KEYS, (
+    f"Quantity enum / _SI_FACTORS key drift: "
+    f"only in factors: {_FACTOR_KEYS - _ENUM_KEYS}; "
+    f"only in enum: {_ENUM_KEYS - _FACTOR_KEYS}"
+)
