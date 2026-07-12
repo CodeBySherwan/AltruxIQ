@@ -872,7 +872,9 @@ def define_stepped_segments(unit_system="Metric", units=None):
     l_mult = system_multiplier(unit_system, "length")
     inv_len = 1.0 / l_mult
     
-    # Import needed modules (path injection is already done at top of inputs.py)
+    # Local imports: kept inside the function to avoid a circular import with
+    # ui.cli (which imports from inputs at module load). No sys.path surgery
+    # needed — common.paths.ensure_src_in_path handles that at startup.
     from solver import moi_solver
     from solver.area_solver import area_from_section
     from ui.Menus import choose_profile, print_error, print_success, clear_screen, print_title, print_option, display_section_library

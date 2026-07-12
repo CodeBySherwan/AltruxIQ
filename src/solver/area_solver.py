@@ -10,8 +10,6 @@ All dimensions are expected in SI units (meters).
 """
 
 import numpy as np
-import os
-import sys
 
 from common.exceptions import SectionGeometryError
 
