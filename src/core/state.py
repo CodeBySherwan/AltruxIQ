@@ -12,7 +12,7 @@ class ProjectState:
     """
     # --- UI & Environment State ---
     current_unit_system: str = "Metric"
-    current_labels: dict = field(default_factory=lambda: METRIC_UNITS)
+    current_units: dict = field(default_factory=lambda: METRIC_UNITS)
     beam_storage: list = field(default_factory=list)
     current_project: dict | None = None
     Materials: Any = None

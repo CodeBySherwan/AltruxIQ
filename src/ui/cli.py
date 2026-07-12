@@ -88,9 +88,9 @@ class NumpyEncoder(json.JSONEncoder):
 # Global Storage Variables
 # -----------------------------
 # Unit label dictionaries — canonical definitions live in `common.units`.
-# Aliased here as METRIC_LABELS / IMPERIAL_LABELS so existing references
-# (`current_labels = METRIC_LABELS`, kwargs `units=current_labels`, etc.) keep working.
-from common.units import METRIC_UNITS as METRIC_LABELS, IMPERIAL_UNITS as IMPERIAL_LABELS
+# These are conversion-divisor dicts, not just display strings, so the codebase
+# uses one consistent name everywhere: METRIC_UNITS / IMPERIAL_UNITS.
+from common.units import METRIC_UNITS, IMPERIAL_UNITS
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
 
 # Stepped beam globals
@@ -110,7 +110,7 @@ def New_Project():
     state.AxialForce = None
     state.AxialDisplacement = None
     state.current_unit_system = "Metric"        # <-- RESET UNITS
-    state.current_labels = METRIC_LABELS
+    state.current_units = METRIC_UNITS
     # Reset project state flags
     state.project_state = {
         "is_loaded": False,
@@ -214,9 +214,9 @@ def load_project():
         state.current_unit_system = state.current_project.get('unit_system', 'Metric')
         # Update the active dictionary based on loaded save
         if state.current_unit_system == "Imperial":
-            state.current_labels = IMPERIAL_LABELS
+            state.current_units = IMPERIAL_UNITS
         else:
-            state.current_labels = METRIC_LABELS
+            state.current_units = METRIC_UNITS
             
         state.beam_length = state.current_project.get('beam_length', 0)
         state.beam_length = state.current_project.get('beam_length', 0)
@@ -601,7 +601,7 @@ def select_material(unit_system="Metric", units=None):
     List all materials from the loaded database, convert them to the active unit system,
     prompt for a selection, and return key properties.
     """
-    if units is None: units = METRIC_LABELS
+    if units is None: units = METRIC_UNITS
     if state.Materials is None:
         print_error("Materials database is not loaded.")
         return None
@@ -912,7 +912,7 @@ def run_extended_menu():
 
         elif selection == '3':  # Profile Definition
             while True:
-                sub_choice = profile_definition_menu(units=state.current_labels)
+                sub_choice = profile_definition_menu(units=state.current_units)
                 if sub_choice == '4':  # Back to main menu
                     break
                 elif sub_choice == '1':  # Define beam length
@@ -921,12 +921,12 @@ def run_extended_menu():
                         if confirmation.lower() != 'y':
                             continue
                             
-                    state.beam_length = Beam_Length(state.current_unit_system, state.current_labels)
+                    state.beam_length = Beam_Length(state.current_unit_system, state.current_units)
                     state.project_state["has_unsaved_changes"] = True
                     print("")
                     cprint("==========================================================", 'red')
                     len_div = 0.3048 if state.current_unit_system == "Imperial" else 1.0
-                    cprint(f"Beam Length is set to: {state.beam_length / len_div:.3f} {state.current_labels['length']}",'white')
+                    cprint(f"Beam Length is set to: {state.beam_length / len_div:.3f} {state.current_units['length']}",'white')
                     cprint("==========================================================", 'red')
                     time.sleep(1)
                     
@@ -950,7 +950,7 @@ def run_extended_menu():
                     
                     # Stepped Bar: use segment definition wizard instead of single profile
                     if state.beam_type == "Stepped Bar":
-                        seg_result = define_stepped_segments(state.current_unit_system, state.current_labels)
+                        seg_result = define_stepped_segments(state.current_unit_system, state.current_units)
                         if seg_result is not None:
                             state.segments = seg_result
                             state.beam_length = state.segments[-1]["end"] if state.segments else 0.0
@@ -976,14 +976,14 @@ def run_extended_menu():
                                 cprint("----------------------------------------------", "white")
                                 print("")
                                 
-                            if profile_choice == '1': result = moi_solver.inertia_moment_ibeam(units=state.current_labels)
-                            elif profile_choice == '2': result = moi_solver.inertia_moment_tbeam(units=state.current_labels)
-                            elif profile_choice == '3': result = moi_solver.inertia_moment_circle(units=state.current_labels)
-                            elif profile_choice == '4': result = moi_solver.inertia_moment_hollow_circle(units=state.current_labels)
-                            elif profile_choice == '5': result = moi_solver.inertia_moment_square(units=state.current_labels)
-                            elif profile_choice == '6': result = moi_solver.inertia_moment_hollow_square(units=state.current_labels)
-                            elif profile_choice == '7': result = moi_solver.inertia_moment_rectangle(units=state.current_labels)
-                            elif profile_choice == '8': result = moi_solver.inertia_moment_hollow_rectangle(units=state.current_labels)
+                            if profile_choice == '1': result = moi_solver.inertia_moment_ibeam(units=state.current_units)
+                            elif profile_choice == '2': result = moi_solver.inertia_moment_tbeam(units=state.current_units)
+                            elif profile_choice == '3': result = moi_solver.inertia_moment_circle(units=state.current_units)
+                            elif profile_choice == '4': result = moi_solver.inertia_moment_hollow_circle(units=state.current_units)
+                            elif profile_choice == '5': result = moi_solver.inertia_moment_square(units=state.current_units)
+                            elif profile_choice == '6': result = moi_solver.inertia_moment_hollow_square(units=state.current_units)
+                            elif profile_choice == '7': result = moi_solver.inertia_moment_rectangle(units=state.current_units)
+                            elif profile_choice == '8': result = moi_solver.inertia_moment_hollow_rectangle(units=state.current_units)
                             else:
                                 print_error("Invalid choice. Please try again.")
                                 continue
@@ -1104,11 +1104,11 @@ def run_extended_menu():
                         time.sleep(2)
                         continue
                         
-                    display_profile_info(state.beam_length, state.shape, state.Ix, state.c, state.b, state.y_array, units=state.current_labels, beam_type=state.beam_type, segments=state.segments)
+                    display_profile_info(state.beam_length, state.shape, state.Ix, state.c, state.b, state.y_array, units=state.current_units, beam_type=state.beam_type, segments=state.segments)
 
         elif selection == '4':  # Material Selection
             while True:
-                sub_choice = material_selection_menu(beam_type=state.beam_type, segments=state.segments, units=state.current_labels)
+                sub_choice = material_selection_menu(beam_type=state.beam_type, segments=state.segments, units=state.current_units)
                 if sub_choice == '5':  # Back to main menu
                     break
                 elif sub_choice == '1':  # Select material
@@ -1121,7 +1121,7 @@ def run_extended_menu():
                                 print_error("Invalid input. Please select a valid option.")
                                 time.sleep(2)
                                 continue    
-                    state.selected_material = select_material(state.current_unit_system, state.current_labels)
+                    state.selected_material = select_material(state.current_unit_system, state.current_units)
                     if state.selected_material:
                         # For stepped bars, ask whether to apply to all or specific segment
                         if state.beam_type == "Stepped Bar" and state.segments:
@@ -1212,7 +1212,7 @@ def run_extended_menu():
                                     0, 
                                     0.55 * seg.get('yield_strength', 0),
                                     state.current_unit_system,
-                                    state.current_labels
+                                    state.current_units
                                 )
                             else:
                                 print_error("Invalid selection.")
@@ -1230,11 +1230,11 @@ def run_extended_menu():
                             state.poisson_ratio, 
                             shear_yield_strength,
                             state.current_unit_system,
-                            state.current_labels
+                            state.current_units
                         )
 
                 elif sub_choice == '3':  # Add Custom Material
-                    new_mat = define_custom_material(state.current_unit_system, state.current_labels)
+                    new_mat = define_custom_material(state.current_unit_system, state.current_units)
                     if new_mat:
                         state.Materials.add_custom_material(new_mat)
                         print_success(f"Custom material '{new_mat['Material']}' added successfully!")
@@ -1303,13 +1303,13 @@ def run_extended_menu():
                 time.sleep(2)
                 
             elif state.beam_type == "Continuous":
-                state.supports_list = define_continuous_supports(state.beam_length, state.current_unit_system, state.current_labels)
+                state.supports_list = define_continuous_supports(state.beam_length, state.current_unit_system, state.current_units)
                 state.project_state["supports_saved"] = True
                 state.project_state["has_unsaved_changes"] = True
                 state.support_types = tuple(["roller" for _ in state.supports_list])  
 
             elif state.beam_type == "Custom":
-                state.supports_list = define_custom_supports(state.beam_length, state.current_unit_system, state.current_labels)
+                state.supports_list = define_custom_supports(state.beam_length, state.current_unit_system, state.current_units)
                 state.project_state["supports_saved"] = True
                 state.project_state["has_unsaved_changes"] = True
                 state.support_types = tuple(
@@ -1323,7 +1323,7 @@ def run_extended_menu():
                     print_error("Please define stepped beam segments first (Menu 3).")
                     time.sleep(2)
                     continue
-                state.supports_list = define_custom_supports(state.beam_length, state.current_unit_system, state.current_labels)
+                state.supports_list = define_custom_supports(state.beam_length, state.current_unit_system, state.current_units)
                 state.project_state["supports_saved"] = True
                 state.project_state["has_unsaved_changes"] = True
                 state.support_types = tuple(
@@ -1343,7 +1343,7 @@ def run_extended_menu():
                             if confirmation.lower() != 'y':
                                 continue
                             
-                        state.A, state.B, state.A_restraint, state.B_restraint, state.A_type, state.B_type = Beam_Supports(state.current_unit_system, state.current_labels)
+                        state.A, state.B, state.A_restraint, state.B_restraint, state.A_type, state.B_type = Beam_Supports(state.current_unit_system, state.current_units)
                         state.project_state["supports_saved"] = True
                         state.project_state["has_unsaved_changes"] = True
                         state.support_types = ("pin", "roller")
@@ -1352,9 +1352,9 @@ def run_extended_menu():
                         cprint("==========================================================", 'red')
                         cprint("                Selected Support Positions                                 ", 'light_yellow')
                         cprint("==========================================================", 'red')
-                        len_div = get_divisor(state.current_labels, 'length')
-                        print(f"Pin Support Position(A): {state.A / len_div:.3f} {state.current_labels['length']}")
-                        print(f"Roller Support Position(B): {state.B / len_div:.3f} {state.current_labels['length']}")
+                        len_div = get_divisor(state.current_units, 'length')
+                        print(f"Pin Support Position(A): {state.A / len_div:.3f} {state.current_units['length']}")
+                        print(f"Roller Support Position(B): {state.B / len_div:.3f} {state.current_units['length']}")
                         cprint("==========================================================", 'red')
                         print("")                        
                         input("Press Enter to return to the menu...")
@@ -1369,9 +1369,9 @@ def run_extended_menu():
                         cprint("==========================================================", 'red')
                         cprint("                Selected Support Positions                                 ", 'light_yellow')
                         cprint("==========================================================", 'red')
-                        len_div = get_divisor(state.current_labels, 'length')
-                        cprint(f"Pin Support Position(A): {state.A / len_div:.3f} {state.current_labels['length']}","white")
-                        cprint(f"Roller Support Position(B): {state.B / len_div:.3f} {state.current_labels['length']}",'white')
+                        len_div = get_divisor(state.current_units, 'length')
+                        cprint(f"Pin Support Position(A): {state.A / len_div:.3f} {state.current_units['length']}","white")
+                        cprint(f"Roller Support Position(B): {state.B / len_div:.3f} {state.current_units['length']}",'white')
                         cprint("==========================================================", 'red')
                         print("")
                         input("Press Enter to return to the menu...")
@@ -1397,7 +1397,7 @@ def run_extended_menu():
                                 continue
                     
                         print("Define Loads:")
-                        loads_dict = manage_loads(state.current_unit_system, state.current_labels, state.beam_type)
+                        loads_dict = manage_loads(state.current_unit_system, state.current_units, state.beam_type)
                         state.pointloads = loads_dict.get("pointloads", [])
                         state.distributedloads = loads_dict.get("distributedloads", [])
                         state.momentloads = loads_dict.get("momentloads", [])
@@ -1446,7 +1446,7 @@ def run_extended_menu():
                             # Single universal call handles all beam types automatically
                             plot_beam_schematic(
                                 state.beam_type, state.beam_length, state.A, state.B, 
-                                state.supports_list, formatted_loads, units=state.current_labels
+                                state.supports_list, formatted_loads, units=state.current_units
                             )
                         except (ValueError, TypeError, OSError) as e:
                             print_error(f"Error plotting beam schematic: {e}")
@@ -1467,7 +1467,7 @@ def run_extended_menu():
                     # Single universal call handles all beam types automatically
                     plot_beam_schematic(
                         state.beam_type, state.beam_length, state.A, state.B, 
-                        state.supports_list, formatted_loads, units=state.current_labels
+                        state.supports_list, formatted_loads, units=state.current_units
                     )
                 except (ValueError, TypeError, OSError) as e:
                     print_error(f"Error plotting beam schematic: {e}")
@@ -1506,7 +1506,7 @@ def run_extended_menu():
                             A_type=state.A_type,
                             B_type=state.B_type,
                             loads=state.loads,
-                            units=state.current_labels)
+                            units=state.current_units)
                         
         
                         # Perform the analysis with proper arguments
@@ -1643,7 +1643,7 @@ def run_extended_menu():
                             min_shear=min_shear,
                             max_bending=max_bending,
                             min_bending=min_bending,
-                            units=state.current_labels
+                            units=state.current_units
                         )
         
                     except (ValueError, TypeError) as e:
@@ -1689,7 +1689,7 @@ def run_extended_menu():
                             Deflection=state.Deflection,
                             Slope=state.Slopes,
                             curv=state.Curvatures,
-                            units=state.current_labels
+                            units=state.current_units
                         )
         
                     except (ValueError, TypeError) as e:
@@ -1807,7 +1807,7 @@ def run_extended_menu():
                             bending_stress=state.bending_stress,
                             Max_bending_stress=Max_bending_stress,
                             FOS=state.FOS,
-                            units=state.current_labels,
+                            units=state.current_units,
                             segments=state.segments
                         )
         
@@ -1836,7 +1836,7 @@ def run_extended_menu():
                 if sub_choice == '1':  # Reaction forces schematic
                     try:
                         print_success("Processing reaction-forces schematic (Plotly)…")
-                        plot_reaction_diagram(state.Reactions, units=state.current_labels)
+                        plot_reaction_diagram(state.Reactions, units=state.current_units)
                     except (ValueError, TypeError, OSError) as e:
                         print_error(f"Error plotting reaction diagram: {e}")
                         time.sleep(2)
@@ -1847,10 +1847,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Force Plot (Matplotlib):")
-                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'SFD',units=state.current_labels)
+                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'SFD',units=state.current_units)
                         elif style == '2':
                                 print_success("Processing shear force plot (Plotly)…")
-                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'SFD',units=state.current_labels)
+                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'SFD',units=state.current_units)
                         
                     except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
@@ -1862,10 +1862,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Bending Moment Plot (Matplotlib):")
-                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'BMD',units=state.current_labels)
+                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'BMD',units=state.current_units)
                         elif style == '2':
                                 print_success("Processing bending moment plot (Plotly)…")
-                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'BMD',units=state.current_labels)
+                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'BMD',units=state.current_units)
  
                     except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
@@ -1877,10 +1877,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Force/Bending Moment Plots (Matplotlib):")
-                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'Both',units=state.current_labels)
+                            Matplot_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,'Both',units=state.current_units)
                         elif style == '2':
                                 print_success("Processing Shear Force/Bending Moment Plots(Plotly):")
-                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'Both',units=state.current_labels)
+                                Plotly_sfd_bmd(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,'Both',units=state.current_units)
 
                     except (ValueError, TypeError, OSError, EOFError) as e:
                         print_error(f"Plotting error: {e}")
@@ -1897,11 +1897,11 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Shear Stress Plot (Matplotlib):")
-                            Matplot_ShearStress(state.X_Field, state.Shear_stress,units=state.current_labels)
+                            Matplot_ShearStress(state.X_Field, state.Shear_stress,units=state.current_units)
 
                         elif style == '2':
                             print_success("Processing Shear Stress Plot(Plotly):")
-                            Plotly_ShearStress(state.X_Field, state.Shear_stress, state.beam_length,units=state.current_labels)
+                            Plotly_ShearStress(state.X_Field, state.Shear_stress, state.beam_length,units=state.current_units)
                             
                         else:
                             print_error("Invalid style selection.")
@@ -1919,10 +1919,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Bending Stress Plots (Matplotlib):")
-                            Matplot_BendingStress(state.X_Field, state.bending_stress, units=state.current_labels)
+                            Matplot_BendingStress(state.X_Field, state.bending_stress, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Bending Stress Plots (Plotly):")
-                            Plotly_BendingStress(state.X_Field, state.bending_stress, state.beam_length, units=state.current_labels)
+                            Plotly_BendingStress(state.X_Field, state.bending_stress, state.beam_length, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -1939,10 +1939,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Deflection/Displacement Plots (Matplotlib):")
-                            Matplot_Deflection(state.X_Field, state.Deflection, units=state.current_labels)
+                            Matplot_Deflection(state.X_Field, state.Deflection, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Deflection/Displacement Plots (Plotly):")
-                            Plotly_Deflection(state.X_Field, state.Deflection, state.beam_length, units=state.current_labels)
+                            Plotly_Deflection(state.X_Field, state.Deflection, state.beam_length, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -1981,12 +1981,12 @@ def run_extended_menu():
                             print_success("Processing Combined Plots (Matplotlib):")
                             Matplot_combined(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment,
                                              Deflection=defl_data, ShearStress=shear_data,
-                                             AxialForce=axial_data, CombinedStress=combo_stress, units=state.current_labels)
+                                             AxialForce=axial_data, CombinedStress=combo_stress, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Combined Plots (Plotly):")
                             Plotly_combined_diagrams(state.X_Field, state.Total_ShearForce, state.Total_BendingMoment, state.beam_length,
                                                      Deflection=defl_data, ShearStress=shear_data,
-                                                     AxialForce=axial_data, CombinedStress=combo_stress, units=state.current_labels)
+                                                     AxialForce=axial_data, CombinedStress=combo_stress, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2005,10 +2005,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Axial Force Plot (Matplotlib):")
-                            Matplot_AxialForce(state.X_Field, state.AxialForce, units=state.current_labels)
+                            Matplot_AxialForce(state.X_Field, state.AxialForce, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Axial Force Plot (Plotly):")
-                            Plotly_AxialForce(state.X_Field, state.AxialForce, state.beam_length, units=state.current_labels)
+                            Plotly_AxialForce(state.X_Field, state.AxialForce, state.beam_length, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2026,10 +2026,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Axial Displacement Plot (Matplotlib):")
-                            Matplot_AxialDisplacement(state.X_Field, state.AxialDisplacement, units=state.current_labels)
+                            Matplot_AxialDisplacement(state.X_Field, state.AxialDisplacement, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Axial Displacement Plot (Plotly):")
-                            Plotly_AxialDisplacement(state.X_Field, state.AxialDisplacement, state.beam_length, units=state.current_labels)
+                            Plotly_AxialDisplacement(state.X_Field, state.AxialDisplacement, state.beam_length, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2071,10 +2071,10 @@ def run_extended_menu():
                         style = input(colored("Choose a style (1 for Matplotlib, 2 for Plotly) ➔ ", 'cyan'))
                         if style == '1':
                             print_success("Processing Combined Stress Plot (Matplotlib):")
-                            Matplot_CombinedStress(state.X_Field, combined_stress, units=state.current_labels)
+                            Matplot_CombinedStress(state.X_Field, combined_stress, units=state.current_units)
                         elif style == '2':
                             print_success("Processing Combined Stress Plot (Plotly):")
-                            Plotly_CombinedStress(state.X_Field, combined_stress, state.beam_length, units=state.current_labels)
+                            Plotly_CombinedStress(state.X_Field, combined_stress, state.beam_length, units=state.current_units)
                         else:
                             print_error("Invalid style selection.")
                             time.sleep(2)
@@ -2112,21 +2112,21 @@ def run_extended_menu():
                                 print_success("Opening 3D Reactions Schematic (PyVista) ...")
                                 PyVista_reactions_schematic(
                                     state.beam_length, state.Reactions, state.shape, state.section_dims,
-                                    state.c, state.b, units=state.current_labels
+                                    state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '2':  # Shear Force
                                 print_success("Opening 3D Shear Force Contour (PyVista) ...")
                                 PyVista_shear_force(
                                     state.X_Field, state.Total_ShearForce, state.beam_length,
-                                    state.shape, state.section_dims, state.c, state.b, units=state.current_labels
+                                    state.shape, state.section_dims, state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '3':  # Bending Moment
                                 print_success("Opening 3D Bending Moment Contour (PyVista) ...")
                                 PyVista_bending_moment(
                                     state.X_Field, state.Total_BendingMoment, state.beam_length,
-                                    state.shape, state.section_dims, state.c, state.b, units=state.current_labels
+                                    state.shape, state.section_dims, state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '4':  # Shear Stress
@@ -2137,7 +2137,7 @@ def run_extended_menu():
                                 print_success("Opening 3D Shear Stress Contour (PyVista) ...")
                                 PyVista_shear_stress(
                                     state.X_Field, state.Shear_stress, state.beam_length,
-                                    state.shape, state.section_dims, state.c, state.b, units=state.current_labels
+                                    state.shape, state.section_dims, state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '5':  # Bending Stress
@@ -2148,7 +2148,7 @@ def run_extended_menu():
                                 print_success("Opening 3D Bending Stress Contour (PyVista) ...")
                                 PyVista_bending_stress(
                                     state.X_Field, state.bending_stress, state.beam_length,
-                                    state.shape, state.section_dims, state.c, state.b, units=state.current_labels
+                                    state.shape, state.section_dims, state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '6':  # Deflection
@@ -2159,7 +2159,7 @@ def run_extended_menu():
                                 print_success("Opening 3D Deflection Contour (PyVista) ...")
                                 PyVista_deflection(
                                     state.X_Field, state.Deflection, state.beam_length,
-                                    state.shape, state.section_dims, state.c, state.b, units=state.current_labels
+                                    state.shape, state.section_dims, state.c, state.b, units=state.current_units
                                 )
 
                             elif pv_choice == '7':  # Combined
@@ -2175,7 +2175,7 @@ def run_extended_menu():
                                     ShearStress=ss_data,
                                     BendingStress=bs_data,
                                     Reactions=reac_data,
-                                    units=state.current_labels
+                                    units=state.current_units
                                 )
 
                             elif pv_choice == '8':  # Load Animation
@@ -2218,7 +2218,7 @@ def run_extended_menu():
                                     result_to_animate=result_key,
                                     n_frames=n_frames,
                                     fps=24,
-                                    units=state.current_labels,
+                                    units=state.current_units,
                                 )
 
                             else:
@@ -2305,7 +2305,7 @@ def run_extended_menu():
                     span_ratio=span_ratio,
                     yield_strength=state.yield_strength if 'yield_strength' in globals() else None,
                     segments=state.segments,
-                    units=state.current_labels
+                    units=state.current_units
                 )
     
             except (ValueError, TypeError) as e:
@@ -2319,14 +2319,14 @@ def run_extended_menu():
                 choice = unit_system_menu(state.current_unit_system)
                 if choice == '1':
                     state.current_unit_system = "Metric"
-                    state.current_labels = METRIC_LABELS
+                    state.current_units = METRIC_UNITS
                     state.project_state["has_unsaved_changes"] = True
                     print_success("Unit system changed to Metric (SI).")
                     time.sleep(1.5)
                     break
                 elif choice == '2':
                     state.current_unit_system = "Imperial"
-                    state.current_labels = IMPERIAL_LABELS
+                    state.current_units = IMPERIAL_UNITS
                     state.project_state["has_unsaved_changes"] = True
                     print_success("Unit system changed to US Customary (Imperial).")
                     time.sleep(1.5)
@@ -2380,7 +2380,7 @@ def run_extended_menu():
 
 def init():
     state.current_unit_system = "Metric"
-    state.current_labels = METRIC_LABELS
+    state.current_units = METRIC_UNITS
     num_points = SOLVER.DEFAULT_NUM_POINTS
     state.project_state = {
         "is_loaded": False,
