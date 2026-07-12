@@ -2,11 +2,12 @@
 
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
-> **Last session**: P0 correctness bugs **DONE**; P1 dead-code/stale-reference
-> cleanup **DONE** (P1-1/2/3/5, plus bonus dead `import sys` in
-> `pyvista_plotting.py`). Branch `fix/p0-correctness-bugs` holds both batches
-> (5 commits). Ready to proceed to **P2** (`units.py` API cleanup).
-> **Date**: 2026-07-11.
+> **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
+> P2-1 (`units.py` API collapse) **DONE**. Branches: `fix/p0-correctness-bugs`
+> (P0+P1, merged to main & pushed), `refactor/p2-units-api-cleanup` (P2-1,
+> not yet merged). Ready for **P2-2** (optional `Quantity` enum) or **P3**
+> (module decomposition).
+> **Date**: 2026-07-12.
 
 ---
 
@@ -193,29 +194,22 @@ grep-and-replace with a full-file re-view afterward.
 
 ### P2 — `units.py` API cleanup (small, non-breaking)
 
-#### P2-1 — Collapse `to_si()` / `system_multiplier()` duplication
+#### P2-1 — Collapse `to_si()` / `system_multiplier()` duplication  ✅ DONE & VERIFIED (2026-07-12)
 
-Both resolve through `_system_key`, which already accepts either a dict or a
-string — so the dual API exists for no reason:
-```python
-def to_si(units_dict, quantity, value):
-    return value * _SI_FACTORS[_system_key(units_dict)].get(quantity, 1.0)
+**Fix applied**: `to_si(unit_system_or_units, quantity, value=None)` — when
+`value` is omitted, returns the bare factor (replaces `system_multiplier`);
+when given, returns `value * factor` (original `to_si`). Accepts either a
+units dict or a system string, unchanged.
 
-def system_multiplier(unit_system, quantity):
-    return _SI_FACTORS[_system_key(unit_system)].get(quantity, 1.0)
-```
-**Fix** — one function, optional `value`:
-```python
-def to_si(unit_system_or_units, quantity: str, value: float | None = None):
-    """SI = value * factor. If value is omitted, returns the bare factor."""
-    factor = _SI_FACTORS[_system_key(unit_system_or_units)].get(quantity, 1.0)
-    return factor if value is None else value * factor
-```
-Removes one exported name and the (currently silent) risk of the two functions
-drifting apart if `_SI_FACTORS` gains a quantity-specific special case in one but
-not the other. Update the handful of `system_multiplier(...)` call sites in
-`inputs.py` to `to_si(..., value=None)`-style calls, or keep `system_multiplier`
-as a one-line backward-compatible wrapper if churn should be minimized.
+`system_multiplier` removed entirely (no back-compat wrapper — only 10 call
+sites in `inputs.py`, none elsewhere). `Menus.py` re-export dropped.
+Commit `refactor(units): collapse to_si and system_multiplier into one
+function` on `refactor/p2-units-api-cleanup`.
+
+**Verified**: AST parse clean; zero `system_multiplier` references remain;
+runtime tests pass (bare-factor mode, value mode, string+dict keys,
+round-trip symmetry with `get_divisor` for every quantity, `1.0` fallback
+preserved); stepped-solver regression 8/8.
 
 #### P2-2 — Optional: `Quantity` enum for typo-safety
 
@@ -533,10 +527,17 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0 and P1 are done.** Next recommended step is **P2 — `units.py` API
-   cleanup** (collapse `to_si`/`system_multiplier` duplication; small,
-   non-breaking). Then the larger structural program **P3 → P4 → P5**.
-   Confirm with the user which tier to start before proceeding — same
-   per-module checkpoint convention as prior phases.
+2. **P0, P1, and P2-1 are done.** Remaining options:
+   - **P2-2** — optional `Quantity` enum (low priority, opt-in typo-safety).
+   - **P3** — module decomposition (`cli.py`/`Menus.py`/`inputs.py` →
+     `console/`, `beam/`, `materials/`, `reports/`, `menus/`, `project/`).
+     Large; do per-module with checkpoints. Suggested order: `console/` first
+     (zero domain coupling, safest), then `materials/selector.py` (closes
+     P0-1's root cause permanently), then `beam/`, then `reports/`, then thin
+     out `cli.py` last.
+   - **P4** — reusable common modules (`ProjectRepository`, `LiveClock`,
+     logging config).
+   - **P5** — future-proofing (solver registry, plugin contract, settings/
+     config split — needed before frame2d/truss2d or a GUI).
    Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
    approval since it changes the launch contract.
