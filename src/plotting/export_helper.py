@@ -34,8 +34,7 @@ import webbrowser
 import plotly.io as pio
 
 from common.paths import DIAGRAM_EXPORT_DIR
-from ui.Menus import print_success, print_error
-from ui.inputs import ask_yes_no, ask_choice
+from ui.console import print_success, print_error, ask_yes_no, ask_choice
 from termcolor import colored
 
 try:

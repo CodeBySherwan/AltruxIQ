@@ -66,11 +66,17 @@ except ImportError as _pv_err:
 from solver.stress_solver import (first_moment_of_area_general,
                          width_array_for_section, calculate_shear_stress,
                          calculate_bending_stress, Factor_of_Safety)
-from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu, choose_profile,display_profile_info,display_analysis_info,
-                 display_engineering_recommendations,display_stress_analysis,display_deflection_analysis,display_analysis_results,material_selection_menu, boundary_conditions_menu, loads_definition_menu, analysis_simulation_menu,
-                 postprocessing_menu, pyvista_menu, print_success, print_error, print_option, print_title, clear_screen,unit_system_menu,get_divisor,resolution_menu,profile_source_menu,display_section_library,
-                 ui_banner, ui_open, ui_close, ui_blank, ui_field, ui_text, ui_bullet, ui_head, ui_footer,
-                 fmt_datetime, fmt_date_compact, fmt_duration)
+from ui.console import (print_success, print_error, print_option, print_title, clear_screen,
+                        ui_banner, ui_open, ui_close, ui_blank, ui_bullet, ui_footer,
+                        fmt_datetime, fmt_date_compact)
+from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu,
+                      choose_profile, display_profile_info, display_analysis_info,
+                      display_engineering_recommendations, display_stress_analysis,
+                      display_deflection_analysis, display_analysis_results,
+                      material_selection_menu, boundary_conditions_menu,
+                      loads_definition_menu, analysis_simulation_menu,
+                      postprocessing_menu, pyvista_menu, unit_system_menu,
+                      resolution_menu, profile_source_menu, display_section_library)
 from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_stepped_segments, define_continuous_supports, get_solver_resolution, define_custom_material, define_custom_supports
 
 
@@ -90,7 +96,7 @@ class NumpyEncoder(json.JSONEncoder):
 # Unit label dictionaries — canonical definitions live in `common.units`.
 # These are conversion-divisor dicts, not just display strings, so the codebase
 # uses one consistent name everywhere: METRIC_UNITS / IMPERIAL_UNITS.
-from common.units import METRIC_UNITS, IMPERIAL_UNITS
+from common.units import METRIC_UNITS, IMPERIAL_UNITS, get_divisor
 # BUG-07 FIX: initialise post-processing outputs to None so combined plots never hit NameError
 
 # Stepped beam globals
