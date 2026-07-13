@@ -3,10 +3,12 @@
 > **Purpose**: One-shot context for a new agent session to resume work without
 > re-reading the full history.
 > **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
-> P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**. Branch
-> `refactor/p2-units-api-cleanup` holds both P2 commits (pending merge).
-> Ready for **P3** (module decomposition — the large structural program).
-> **Date**: 2026-07-12.
+> P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**,
+> **P3-checkpoint-1** (`console/` extraction) **DONE**. Branches:
+> `refactor/p2-units-api-cleanup` (P2, pending merge) and
+> `refactor/p3-console-kit` (this checkpoint, pending merge).
+> Ready for **P3-checkpoint-2** (`materials/selector.py` — closes P0-1 root cause).
+> **Date**: 2026-07-13.
 
 ---
 
@@ -239,6 +241,71 @@ Each of these three files mixes 3–4 unrelated responsibilities. Split by **wha
 a module knows about**, not by file size — this is what makes the pieces
 reusable by a future non-beam calculator. Proposed target structure (moves, not
 rewrites — keep signatures stable):
+
+#### P3-checkpoint-1 — Extract `ui/console/` (generic terminal kit)  ✅ DONE & VERIFIED (2026-07-13)
+
+**Scope**: moved the domain-agnostic terminal kit (prompts, widgets,
+formatters, session clock, `print_*`/`clear_screen`) out of `Menus.py` and
+`inputs.py` into a new `ui/console/` package. Pure relocation, no logic
+changes. Decision locked at plan time: **update all importers, no re-export
+shims**.
+
+**New package** `src/ui/console/`:
+- `formatting.py` — `fmt_datetime`, `fmt_date_compact`, `fmt_duration`.
+- `widgets.py` — `SESSION_START`, `UI_W`, session clock (`session_uptime`,
+  `input_with_live_clock`, `_live_clock_supported`), all `ui_*` widgets
+  (`ui_banner`/`ui_open`/`ui_close`/`ui_blank`/`ui_text`/`ui_head`/`ui_field`/
+  `ui_bullet`/`ui_bar`/`ui_check_row`/`ui_verdict_badge`/`ui_footer`/
+  `ui_menu_stage`), and `clear_screen`/`print_title`/`print_option`/
+  `print_error`/`print_success`. Deps: stdlib + `termcolor` only.
+- `prompts.py` — `PROMPT_CARET`, `_CANCEL_TOKENS`, `_dim`, `_format_prompt`,
+  `_range_hint`, `ask_float`/`ask_int`/`ask_text`/`ask_choice`/`ask_yes_no`.
+  Depends on `ui.console.widgets` (for `print_error`).
+- `__init__.py` — single re-export hub so consumers write one
+  `from ui.console import ...` line.
+- Intra-package dep direction is acyclic: `prompts → widgets`; `formatting`
+  standalone.
+
+**Consumer rewrites** (6 files, all importers updated):
+- `ui/Menus.py` — kit now from `ui.console`; dropped dead `cprint` import;
+  dropped the `common.units` re-export shim (its only real consumer was
+  `cli.py:get_divisor`, redirected to `common.units`). Kept
+  `from common.units import METRIC_UNITS` (real usage as default-arg value in
+  7 renderer signatures) and `SERVICEABILITY` (DOMAIN). Shrunk 1914→1677 lines.
+- `ui/inputs.py` — kit from `ui.console`; dropped 4 dead `ui_*` imports
+  (`ui_field`/`ui_text`/`ui_bullet`/`ui_head`); trimmed prompt import to the 3
+  actually used (`ask_float`/`ask_int`/`ask_text`). Lazy import in
+  `define_stepped_segments` split: kit removed (already module-level), DOMAIN
+  (`choose_profile`/`display_section_library`) stays from `ui.Menus`. Shrunk
+  1062→933 lines.
+- `ui/cli.py` — the big `from ui.Menus import (...)` split into
+  `ui.console` (13 kit symbols) + `ui.Menus` (20 DOMAIN symbols);
+  `get_divisor` moved to the existing `common.units` import; dropped 4 dead
+  kit imports (`ui_field`/`ui_text`/`ui_head`/`fmt_duration`). **AST-verified
+  only** (can't runtime-import — `indeterminatebeam` transitive).
+- `plotting/export_helper.py` + `plotting/pyvista_plotting.py` — kit + `ask_*`
+  now from `ui.console` (collapsed 2 import lines → 1).
+
+**Verified**: `ast.parse` clean on all 9 files; runtime import of `ui.console`
++ stripped `ui.Menus` (20 domain symbols) + `ui.inputs` (9 wizards) +
+`plotting.export_helper` all clean; cli.py AST audit confirms zero kit symbols
+leak from the `ui.Menus` import and `get_divisor` now comes from
+`common.units`; stale-reference grep across `src/` returns zero matches;
+integration test imports all 8 of cli.py's ui/plotting deps together; stepped-
+solver regression **8/8 PASS**. Commit `refactor(ui): extract generic terminal
+kit into ui/console/ package` on `refactor/p3-console-kit`.
+
+**Carry-forward notes for checkpoint-2**:
+- The `cli ↔ inputs` cycle still exists (broken by `inputs.py:892`'s lazy
+  `from ui.cli import select_material, load_material_database`). Checkpoint-2
+  (`materials/selector.py`) eliminates it permanently.
+- `LiveClock` class encapsulation (P4-2) deferred — `SESSION_START` + clock
+  funcs moved verbatim into `widgets.py`; P4-2 will class-ify them and retire
+  the module global.
+- Deferred cleanups still open (not in this checkpoint's touched lines):
+  `inputs.py:1-2` unused `sys`/`os`; `inputs.py:12` unused `UNIT_SYSTEMS`;
+  `cli.py` possibly-dead `area_from_section` import (verify call sites before
+  removing).
 
 ```
 src/ui/
@@ -530,14 +597,22 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0, P1, and P2 are fully done.** Next is **P3 — module decomposition**
-   (`cli.py`/`Menus.py`/`inputs.py` → `console/`, `beam/`, `materials/`,
-   `reports/`, `menus/`, `project/`). Large; do per-module with checkpoints.
-   Suggested order: `console/` first (zero domain coupling, safest), then
-   `materials/selector.py` (closes P0-1's root cause permanently), then
-   `beam/`, then `reports/`, then thin out `cli.py` last.
+2. **P0, P1, P2, and P3-checkpoint-1 are fully done.** Next is
+   **P3-checkpoint-2 — `materials/selector.py`**: move
+   `select_material`/`load_material_database`/`display_material_info` out of
+   `cli.py` into `ui/materials/selector.py`. This **permanently closes P0-1's
+   root cause** by eliminating the `cli ↔ inputs` cycle (the lazy import at
+   `inputs.py:892` becomes a clean eager import from a leaf module). After
+   that: checkpoint-3 `beam/` wizards, checkpoint-4 `reports/` renderers,
+   checkpoint-5 thin out `cli.py` to a pure orchestrator.
    Then **P4** (`ProjectRepository`, `LiveClock`, logging) and **P5**
    (solver registry, plugin contract, settings/config split — needed before
    frame2d/truss2d or a GUI).
    Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
    approval since it changes the launch contract.
+3. **Key constraint unchanged**: `cli.py` cannot be runtime-imported in the
+   sandbox (transitive `indeterminatebeam`). Verify its changes via AST.
+   `Menus.py`, `inputs.py`, `ui/console/*`, and the plotting modules ARE
+   runtime-testable. Regression suite is `test_stepped_solver.py` (run
+   directly with `PYTHONPATH=src python test_stepped_solver.py` — 8/8; pytest
+   is not installed in the sandbox Python).

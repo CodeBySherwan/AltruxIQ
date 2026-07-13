@@ -22,11 +22,10 @@ try:
 except ImportError:
     raise ImportError("PyVista is not installed. Run: pip install pyvista")
 
-from ui.Menus import  print_success, print_error
+from ui.console import print_success, print_error, ask_choice, ask_yes_no
 
 from common.units import default_units,get_divisor  # canonical default units dict
 from common.paths import SCREENSHOTS_DIR, EXPORTS_DIR
-from ui.inputs import ask_choice, ask_yes_no
 from termcolor import colored
 
 # ---------------------------------------------------------------------------
