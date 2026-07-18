@@ -4,10 +4,14 @@
 > re-reading the full history.
 > **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
 > P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**,
-> **P3-checkpoint-1** (`console/` extraction) **DONE**. Branches:
-> `refactor/p2-units-api-cleanup` (P2, pending merge) and
-> `refactor/p3-console-kit` (this checkpoint, pending merge).
-> Ready for **P3-checkpoint-2** (`materials/selector.py` — closes P0-1 root cause).
+> **P3-checkpoint-1** (`console/` extraction) **DONE**,
+> **P3-checkpoint-2** (`materials/selector.py`) **DONE**. Branches:
+> `refactor/p2-units-api-cleanup` (P2, pending merge),
+> `refactor/p3-console-kit` (checkpoint-1, pending merge), and
+> `refactor/p3-materials-selector` (checkpoint-2, stacks on checkpoint-1, pending
+> merge). The **`cli ↔ inputs` circular-import cycle is permanently
+> eliminated** (zero `from ui.cli import` statements remain in `src/`).
+> Ready for **P3-checkpoint-3** (`beam/` wizards).
 > **Date**: 2026-07-13.
 
 ---
@@ -295,10 +299,8 @@ integration test imports all 8 of cli.py's ui/plotting deps together; stepped-
 solver regression **8/8 PASS**. Commit `refactor(ui): extract generic terminal
 kit into ui/console/ package` on `refactor/p3-console-kit`.
 
-**Carry-forward notes for checkpoint-2**:
-- The `cli ↔ inputs` cycle still exists (broken by `inputs.py:892`'s lazy
-  `from ui.cli import select_material, load_material_database`). Checkpoint-2
-  (`materials/selector.py`) eliminates it permanently.
+**Carry-forward notes from checkpoint-1**:
+- ~~The `cli ↔ inputs` cycle still exists~~ → **RESOLVED by checkpoint-2**.
 - `LiveClock` class encapsulation (P4-2) deferred — `SESSION_START` + clock
   funcs moved verbatim into `widgets.py`; P4-2 will class-ify them and retire
   the module global.
@@ -306,6 +308,59 @@ kit into ui/console/ package` on `refactor/p3-console-kit`.
   `inputs.py:1-2` unused `sys`/`os`; `inputs.py:12` unused `UNIT_SYSTEMS`;
   `cli.py` possibly-dead `area_from_section` import (verify call sites before
   removing).
+
+#### P3-checkpoint-2 — Extract `ui/materials/selector.py`  ✅ DONE & VERIFIED (2026-07-13)
+
+**Scope**: moved all four material-handling functions out of `cli.py` (3
+functions) and `inputs.py` (1 function) into a new leaf module
+`ui/materials/selector.py`. Pure relocation; signatures and behavior unchanged.
+
+**The key result**: the `cli ↔ inputs` circular-import cycle — the root cause
+of the historical P0-1 crash — is **permanently eliminated**. Zero `from
+ui.cli import` statements remain anywhere in `src/`.
+
+**New module** `src/ui/materials/selector.py`:
+- `load_material_database()` ← `cli.py` — writes `state.Materials`.
+- `select_material(unit_system, units)` ← `cli.py` — reads
+  `state.Materials.all_materials`, writes `state.project_state` flags, returns
+  material dict.
+- `display_material_info(...)` ← `cli.py` — pure-presentational (params only,
+  no `state`).
+- `define_custom_material(unit_system, units)` ← `inputs.py` — uses
+  `ask_float`/`ask_text` + `to_json`, returns material dict.
+
+**Leaf module proof**: the new module imports only from `common.units`,
+`common.state`, `database.materials_database`, `ui.console`, and stdlib. Zero
+back-edges into `ui.cli` or `ui.inputs`. Verified by import-graph inspection
+after loading `ui.materials.selector` + `ui.inputs` — `ui.cli` is never pulled
+into `sys.modules`.
+
+**Consumer rewrites**:
+- `ui/cli.py` — removed the 3 function defs (lines 589–795, ~207 lines).
+  Added `from ui.materials.selector import load_material_database,
+  select_material, display_material_info, define_custom_material`. Dropped
+  `define_custom_material` from the `ui.inputs` import. Shrunk 2409→2201
+  lines.
+- `ui/inputs.py` — removed `define_custom_material` (lines 665–720, ~56
+  lines). Converted the lazy import block at `define_stepped_segments` from
+  `from ui.cli import select_material, load_material_database` (in-function,
+  the cycle-break point) to a top-level eager `from ui.materials.selector
+  import select_material, load_material_database`. Added `from core.state
+  import state` at module top (needed for the `state.Materials` guard that
+  was previously served by the lazy import). Shrunk 933→876 lines.
+
+**Bonus cleanup**: the misleading comment in `inputs.py` ("still live in
+ui.cli, to be moved in P3") deleted — the move it predicted is now done.
+
+**Verified**: `ast.parse` clean on all 4 files; runtime import of
+`ui.materials.selector` (4 functions) + `ui.inputs` (8 wizards) clean; cycle
+elimination grep (`from ui.cli import` across `src/`) returns zero matches
+(the single hit is a docstring comment, not an import); cli.py AST audit
+confirms `ui.materials.selector` import present and `define_custom_material`
+absent from `ui.inputs` import; integration test imports all 9 of cli.py's
+ui/plotting deps together; stepped-solver regression **8/8 PASS**. Commit
+`refactor(ui): extract material functions into ui/materials/selector.py` on
+`refactor/p3-materials-selector` (stacks on checkpoint-1).
 
 ```
 src/ui/
@@ -597,14 +652,14 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0, P1, P2, and P3-checkpoint-1 are fully done.** Next is
-   **P3-checkpoint-2 — `materials/selector.py`**: move
-   `select_material`/`load_material_database`/`display_material_info` out of
-   `cli.py` into `ui/materials/selector.py`. This **permanently closes P0-1's
-   root cause** by eliminating the `cli ↔ inputs` cycle (the lazy import at
-   `inputs.py:892` becomes a clean eager import from a leaf module). After
-   that: checkpoint-3 `beam/` wizards, checkpoint-4 `reports/` renderers,
-   checkpoint-5 thin out `cli.py` to a pure orchestrator.
+2. **P0, P1, P2, P3-checkpoint-1, and P3-checkpoint-2 are fully done.** The
+   `cli ↔ inputs` circular-import cycle is permanently eliminated. Next is
+   **P3-checkpoint-3 — `beam/` wizards**: move the beam-domain input wizards
+   (`Beam_Classification`, `Beam_Length`, `Beam_Supports`,
+   `define_continuous_supports`, `define_custom_supports`, `manage_loads`,
+   `define_stepped_segments`) out of `inputs.py` into `ui/beam/`. After that:
+   checkpoint-4 `reports/` renderers, checkpoint-5 thin out `cli.py` to a pure
+   orchestrator.
    Then **P4** (`ProjectRepository`, `LiveClock`, logging) and **P5**
    (solver registry, plugin contract, settings/config split — needed before
    frame2d/truss2d or a GUI).

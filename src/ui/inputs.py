@@ -12,10 +12,12 @@ import numpy as np
 from common.units import to_si, default_units, UNIT_SYSTEMS, to_json
 from common.config import SOLVER
 from common.exceptions import SectionGeometryError
+from core.state import state
 
 from ui.console import (print_error, print_success, print_title, print_option, clear_screen,
                         ui_banner, ui_open, ui_close, ui_blank)
 from ui.console.prompts import ask_float, ask_int, ask_text
+from ui.materials.selector import select_material, load_material_database
 
 # =============================================================================
 #  BEAM-FEA INPUT WIZARDS
@@ -660,64 +662,6 @@ def get_solver_resolution():
     return ask_int("Enter custom solver resolution",
                    minimum=SOLVER.MIN_NUM_POINTS, maximum=SOLVER.MAX_NUM_POINTS,
                    default=SOLVER.DEFAULT_NUM_POINTS, allow_cancel=True)
-#--------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------
-def define_custom_material(unit_system="Metric", units=None):
-    """Interactive wizard to create a custom material entry."""
-    if units is None: units = default_units()
-    clear_screen()
-    print(colored("╔══════════════════════════════════════════════════════════════╗", 'cyan', attrs=['bold']))
-    print(colored("║               DEFINE CUSTOM MATERIAL                         ║", 'cyan', attrs=['bold']))
-    print(colored("╚══════════════════════════════════════════════════════════════╝", 'cyan', attrs=['bold']))
-    print("\n")
-    name = ask_text("Enter material name", required=True, allow_cancel=True, max_len=60)
-    if name is None:
-        return None
-
-    # Inputs in active units, converted to JSON base schema (kg/m³, MPa, GPa)
-    # via common.units.to_json — single source of truth for the storage convention
-    dens_val = ask_float("Enter density", unit=units['density'], minimum=0, exclusive_min=True, allow_cancel=True)
-    if dens_val is None: return None
-    json_dens = to_json(units, 'density', dens_val)
-
-    yield_val = ask_float("Enter yield strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
-    if yield_val is None: return None
-    json_yield = to_json(units, 'stress', yield_val)
-
-    ult_val = ask_float("Enter ultimate strength", unit=units['stress'], minimum=0, exclusive_min=True, allow_cancel=True)
-    if ult_val is None: return None
-    json_ult = to_json(units, 'stress', ult_val)
-
-    if json_yield >= json_ult:
-        print_error("Yield Strength must be less than Ultimate Strength.")
-        time.sleep(2)
-        return None
-
-    mod_val = ask_float("Enter elastic modulus", unit=units['modulus'], minimum=0, exclusive_min=True, allow_cancel=True)
-    if mod_val is None: return None
-    json_mod = to_json(units, 'modulus', mod_val)
-
-    poisson = ask_float("Enter Poisson's ratio", minimum=0, maximum=0.5, exclusive_min=True, exclusive_max=True, default=0.3, allow_cancel=True)
-    if poisson is None: return None
-
-    therm = ask_float("Enter thermal expansion coefficient (1/°C, 0 to skip)", default=0, allow_cancel=True)
-    if therm is None: return None
-    desc = ask_text("Enter a short description", required=False, allow_cancel=True, max_len=120)
-    if desc is None:
-        desc = ""
-
-    material_dict = {
-        "Material": name,
-        "Density": round(json_dens, 2),
-        "Yield Strength": round(json_yield, 2),
-        "Ultimate Strength": round(json_ult, 2),
-        "Elastic Modulus": round(json_mod, 2),
-        "Poisson Ratio": round(poisson, 3),
-        "Thermal Expansion": therm if therm != 0 else 0,
-        "Description": desc
-    }
-
-    return material_dict
 #==================================================================================
 def define_stepped_segments(unit_system="Metric", units=None):
     """
@@ -886,11 +830,8 @@ def define_stepped_segments(unit_system="Metric", units=None):
         print("")
         print(colored("┌─ SELECT MATERIAL FOR THIS SEGMENT ─" + "─"*20, 'magenta', attrs=['bold']))
 
-        # Lazy import: select_material / load_material_database still live in
-        # ui.cli (to be moved to ui/materials/selector.py in P3). Materials is
-        # no longer a cli.py module global — it lives on state.Materials.
-        from core.state import state
-        from ui.cli import select_material, load_material_database
+        # select_material / load_material_database imported eagerly at module
+        # top from ui.materials.selector (leaf module — no circular import).
         if state.Materials is None:
             load_material_database()
 
