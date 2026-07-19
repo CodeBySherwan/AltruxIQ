@@ -79,7 +79,9 @@ from ui.Menus import (main_menu_template, project_management_menu, profile_defin
                       resolution_menu, profile_source_menu, display_section_library)
 from ui.materials.selector import (load_material_database, select_material,
                                    display_material_info, define_custom_material)
-from ui.inputs import Beam_Length, Beam_Supports, manage_loads, Beam_Classification, define_stepped_segments, define_continuous_supports, get_solver_resolution, define_custom_supports
+from ui.beam import (Beam_Length, Beam_Supports, manage_loads, Beam_Classification,
+                     define_stepped_segments, define_continuous_supports,
+                     get_solver_resolution, define_custom_supports)
 
 
 class NumpyEncoder(json.JSONEncoder):
