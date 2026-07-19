@@ -4,19 +4,19 @@
 > re-reading the full history.
 > **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
 > P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**,
-> **P3-checkpoint-1** (`console/` extraction) **DONE**,
-> **P3-checkpoint-2** (`materials/selector.py`) **DONE**,
-> **P3-checkpoint-3** (`beam/` wizards) **DONE**. Checkpoints 1–2 are merged
-> into `main` (PRs #2, #3); checkpoint-3 lives on branch
-> `refactor/p3-beam-wizards` (pending merge). **`ui/inputs.py` no longer
-> exists** — its 8 wizards now live in `ui/beam/`, and the
-> **`cli ↔ inputs` circular-import cycle is permanently eliminated** (zero
-> `from ui.cli import` statements remain in `src/`).
+> **P3-checkpoints 1–4 DONE**: `console/` kit, `materials/selector.py`,
+> `beam/` wizards (all merged — PRs #2, #3, #4), and `reports/` renderers
+> (branch `refactor/p3-reports`, pending merge). **`ui/inputs.py` no longer
+> exists**; `Menus.py` is down to navigation menus + `display_profile_info`
+> (1677→843 lines). The **`cli ↔ inputs` circular-import cycle is
+> permanently eliminated** (zero `from ui.cli import` statements in `src/`).
+> **Bonus fix in checkpoint-4**: latent `NameError: get_divisor` (introduced
+> by checkpoint-1's shim drop) found & repaired — see §P3-checkpoint-4.
 > **P6 — unified stage-driven Stepped Bar APPROVED** (2026-07-19, see §P6):
 > the `define_stepped_segments` monolith retires; Stepped Bar flows through
 > the same main-menu stages as every other beam type. Queued after
 > P3-checkpoint-5, before P4.
-> Ready for **P3-checkpoint-4** (`reports/` renderers).
+> Ready for **P3-checkpoint-5** (`menus/` + thin `cli.py`).
 > **Date**: 2026-07-19.
 
 ---
@@ -415,6 +415,53 @@ dead imports were not carried into the new modules (per-module
 minimal-import discipline). The "`cli.py` possibly-dead `area_from_section`
 import" item remains open (untouched by this checkpoint).
 
+#### P3-checkpoint-4 — Extract `ui/reports/` renderers  ✅ DONE & VERIFIED (2026-07-19)
+
+**Scope**: moved the 5 post-solution report renderers out of `Menus.py`
+(1677→843 lines) into a new `ui/reports/` package. Pure relocation —
+byte-identical function bodies. `display_profile_info` deliberately stays
+in `ui.Menus` (post-profile-confirmation screen, not an analysis report).
+
+**New package** `src/ui/reports/`:
+- `analysis_report.py` — `display_analysis_info`, `display_analysis_results`.
+- `deflection_report.py` — `display_deflection_analysis`.
+- `stress_report.py` — `display_stress_analysis`.
+- `recommendations_report.py` — `display_engineering_recommendations`.
+- `__init__.py` — re-export hub (ui/console pattern).
+
+**Consumer rewrite**: `cli.py` — the 5 renderer names moved from the
+`from ui.Menus import (...)` group (now 15 names) to a new
+`from ui.reports import (...)` line. Call sites untouched.
+
+**Menus.py trim**: dropped the imports only the renderers used
+(`SERVICEABILITY`, `ui_text`, `ui_head`, `ui_bullet`, `ui_check_row`,
+`ui_verdict_badge`, `ui_footer`); AST-verified every retained import has a
+live usage; header comment rewritten for what remains.
+
+**⚠ Bonus correctness fix (P0-class, latent)**: checkpoint-1 (`a2db0eb`)
+dropped `get_divisor` from `Menus.py`'s imports when the `common.units`
+re-export shim was removed, but `display_profile_info` and all 5 renderers
+call `get_divisor` in their bodies — 18 call sites with no import. Every
+renderer call would have raised `NameError: name 'get_divisor' is not
+defined`. Never caught before because the sandbox can't runtime-drive
+cli.py and the regression suite exercises the solver, not the UI
+renderers. Found by runtime-probing during this checkpoint; fixed by
+importing `get_divisor` from `common.units` in the 4 new modules and in
+trimmed `Menus.py`. Function bodies byte-identical — wiring restored, no
+logic change.
+
+**Verified** (independently re-run by the parent agent, not just the
+executor): relocation diff vs `HEAD~1:src/ui/Menus.py` — 5/5 functions
+byte-identical; `ast.parse` clean on 7 files; `ui.reports` runtime-imports
+(leaf: no `ui.cli`, no `solver.*`, no `ui.Menus` pulled in); trimmed
+`ui.Menus` keeps exactly 15 callables (14 menus + `display_profile_info`);
+cli.py AST audit (5 names from `ui.reports`, zero in the `ui.Menus` group,
+all 5 used); zero stale `from ui.Menus import ... display_*` matches
+repo-wide; 7 unguarded ui/plotting deps co-import cleanly;
+stepped-solver regression **8/8 PASS**. Commit
+`refactor(ui): extract domain report renderers into ui/reports/ package`
+on `refactor/p3-reports`.
+
 ```
 src/ui/
 ├── console/                     # generic, domain-agnostic terminal UI kit
@@ -429,7 +476,7 @@ src/ui/
 ├── materials/
 │   └── selector.py               # select_material, define_custom_material, display_material_info
 │                                    #   (moved OUT of cli.py — permanently fixes P0-1's root cause)
-├── reports/                       # domain report renderers (currently in Menus.py)
+├── reports/                       # domain report renderers (DONE — checkpoint-4)
 │   ├── analysis_report.py        # display_analysis_results, display_analysis_info
 │   ├── deflection_report.py      # display_deflection_analysis
 │   ├── stress_report.py          # display_stress_analysis
@@ -778,15 +825,16 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0, P1, P2, and P3-checkpoints 1–3 are fully done.** The
-   `cli ↔ inputs` circular-import cycle is permanently eliminated and
-   `ui/inputs.py` no longer exists (wizards now in `ui/beam/`). Next is
-   **P3-checkpoint-4 — `reports/` renderers**: move the domain report
-   renderers (`display_analysis_results`, `display_analysis_info`,
-   `display_deflection_analysis`, `display_stress_analysis`,
-   `display_engineering_recommendations`) out of `Menus.py` into
-   `ui/reports/`. After that: checkpoint-5 — fold the navigation menus into
-   `ui/menus/` and thin out `cli.py` to a pure orchestrator.
+2. **P0, P1, P2, and P3-checkpoints 1–4 are fully done.** The
+   `cli ↔ inputs` circular-import cycle is permanently eliminated,
+   `ui/inputs.py` no longer exists, and the 5 report renderers now live in
+   `ui/reports/` (`Menus.py` keeps only navigation menus +
+   `display_profile_info`). Checkpoint-4 also repaired a latent
+   `NameError: get_divisor` from checkpoint-1 (see §P3-checkpoint-4).
+   Next is **P3-checkpoint-5 — `menus/` + thin `cli.py`**: move the 14
+   navigation menu functions out of `Menus.py` into `ui/menus/`, then thin
+   `cli.py` to a pure orchestrator (menu loop + dispatch; project save/load
+   moves to `ui/project/` under P4-1).
    Then **P6** (unified stage-driven Stepped Bar — APPROVED, see §P6;
    retires the `define_stepped_segments` monolith), then **P4**
    (`ProjectRepository`, `LiveClock`, logging) and **P5**
@@ -796,9 +844,10 @@ class UserSettings:
    approval since it changes the launch contract.
 3. **Key constraint unchanged**: `cli.py` cannot be runtime-imported in the
    sandbox (transitive `indeterminatebeam`). Verify its changes via AST.
-   `Menus.py`, `ui/beam/*`, `ui/console/*`, and the plotting modules ARE
-   runtime-testable (pyvista absent — its import stays try/except-guarded
-   in cli.py). Regression suite is `test_stepped_solver.py` (run directly
-   with `PYTHONPATH=src py -3 test_stepped_solver.py` — 8/8; `python` is
-   not on PATH in this shell, use the `py -3` launcher; pytest is not
-   installed in the sandbox Python).
+   `Menus.py`, `ui/beam/*`, `ui/console/*`, `ui/reports/*`, and the plotting
+   modules ARE runtime-testable (pyvista absent — its import stays
+   try/except-guarded in cli.py). Regression suite is
+   `test_stepped_solver.py` (run directly with `PYTHONPATH=src py -3
+   test_stepped_solver.py` — 8/8; `python` is not on PATH in this shell,
+   use the `py -3` launcher; pytest is not installed in the sandbox
+   Python).
