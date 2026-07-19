@@ -5,14 +5,15 @@
 > **Last session**: P0 (correctness) **DONE**, P1 (dead-code cleanup) **DONE**,
 > P2 (`units.py` API cleanup — both P2-1 and P2-2) **DONE**,
 > **P3-checkpoint-1** (`console/` extraction) **DONE**,
-> **P3-checkpoint-2** (`materials/selector.py`) **DONE**. Branches:
-> `refactor/p2-units-api-cleanup` (P2, pending merge),
-> `refactor/p3-console-kit` (checkpoint-1, pending merge), and
-> `refactor/p3-materials-selector` (checkpoint-2, stacks on checkpoint-1, pending
-> merge). The **`cli ↔ inputs` circular-import cycle is permanently
-> eliminated** (zero `from ui.cli import` statements remain in `src/`).
-> Ready for **P3-checkpoint-3** (`beam/` wizards).
-> **Date**: 2026-07-13.
+> **P3-checkpoint-2** (`materials/selector.py`) **DONE**,
+> **P3-checkpoint-3** (`beam/` wizards) **DONE**. Checkpoints 1–2 are merged
+> into `main` (PRs #2, #3); checkpoint-3 lives on branch
+> `refactor/p3-beam-wizards` (pending merge). **`ui/inputs.py` no longer
+> exists** — its 8 wizards now live in `ui/beam/`, and the
+> **`cli ↔ inputs` circular-import cycle is permanently eliminated** (zero
+> `from ui.cli import` statements remain in `src/`).
+> Ready for **P3-checkpoint-4** (`reports/` renderers).
+> **Date**: 2026-07-19.
 
 ---
 
@@ -362,14 +363,62 @@ ui/plotting deps together; stepped-solver regression **8/8 PASS**. Commit
 `refactor(ui): extract material functions into ui/materials/selector.py` on
 `refactor/p3-materials-selector` (stacks on checkpoint-1).
 
+#### P3-checkpoint-3 — Extract `ui/beam/` wizards  ✅ DONE & VERIFIED (2026-07-19)
+
+**Scope**: moved all 8 beam-domain input wizards out of `inputs.py` into a
+new `ui/beam/` package. Pure relocation; signatures and behavior unchanged.
+**`ui/inputs.py` no longer exists** — deleted per the locked
+update-all-importers/no-shim convention.
+
+**New package** `src/ui/beam/`:
+- `classification.py` — `Beam_Classification`, `get_solver_resolution`.
+  (`get_solver_resolution` was absent from the original P3 plan; placed
+  here because both are small "define the analysis problem" wizards —
+  placement decision recorded in the module docstring.)
+- `geometry.py` — `Beam_Length`, `Beam_Supports`,
+  `define_continuous_supports`, `define_custom_supports`.
+- `loads.py` — `manage_loads`.
+- `stepped.py` — `define_stepped_segments`. Function-local imports
+  (`solver`, `ui.Menus`, `database`) kept function-local; one stale comment
+  (citing the since-eliminated ui.cli import cycle) replaced with an
+  accurate rationale — the only non-verbatim hunk in the move.
+- `__init__.py` — single re-export hub (ui/console pattern).
+
+**Consumer rewrite**: `cli.py`'s lone `from ui.inputs import (...)` (8
+names) repointed to `ui.beam`. No other importer of `ui.inputs` existed
+anywhere in the repo.
+
+**Verified**: pure-relocation diff vs `HEAD:src/ui/inputs.py` — 7/8
+functions byte-identical, `define_stepped_segments` differs only in the
+approved comment swap; `ast.parse` clean on all 6 files; `ui.beam`
+runtime-imports with all 8 names and does NOT pull `ui.cli` into
+`sys.modules` (import-time deps are only `ui.console` +
+`ui.materials.selector` + foundation — no solver layer); cli.py AST audit
+(`ui.beam` import with all 8 names, zero `ui.inputs` refs, all 8 names
+used); zero `from ui.inputs`/`import ui.inputs` matches repo-wide;
+integration test — all 6 unguarded ui/plotting deps of cli.py import
+together (`plotting.pyvista_plotting` stays try/except-guarded; pyvista
+absent in the sandbox is pre-existing, unchanged); stepped-solver
+regression **8/8 PASS**. Commit `refactor(ui): extract beam-domain wizards
+into ui/beam/ package` on `refactor/p3-beam-wizards`. Git detected
+`inputs.py → beam/loads.py` as a 50%-similarity rename, independently
+confirming the move's fidelity.
+
+**Deferred-item dispositions**: checkpoint-1's open cleanups
+"`inputs.py:1-2` unused `sys`/`os`" and "`inputs.py:12` unused
+`UNIT_SYSTEMS`" are **resolved by elimination** — the file is gone and the
+dead imports were not carried into the new modules (per-module
+minimal-import discipline). The "`cli.py` possibly-dead `area_from_section`
+import" item remains open (untouched by this checkpoint).
+
 ```
 src/ui/
 ├── console/                     # generic, domain-agnostic terminal UI kit
 │   ├── prompts.py               # ask_float, ask_int, ask_text, ask_choice, ask_yes_no
 │   ├── widgets.py                # ui_banner/ui_open/.../LiveClock
 │   └── formatting.py            # fmt_datetime, fmt_duration, fmt_date_compact
-├── beam/                         # domain wizards (currently in inputs.py)
-│   ├── classification.py        # Beam_Classification
+├── beam/                         # domain wizards (DONE — checkpoint-3)
+│   ├── classification.py        # Beam_Classification, get_solver_resolution
 │   ├── geometry.py               # Beam_Length, Beam_Supports, define_continuous_supports, define_custom_supports
 │   ├── loads.py                   # manage_loads
 │   └── stepped.py                 # define_stepped_segments
@@ -652,14 +701,15 @@ class UserSettings:
 ## 6. Resume instruction for the new session
 
 1. Read this file + `AGENT_BRIEFING.md` §1–5, 9, 14.
-2. **P0, P1, P2, P3-checkpoint-1, and P3-checkpoint-2 are fully done.** The
-   `cli ↔ inputs` circular-import cycle is permanently eliminated. Next is
-   **P3-checkpoint-3 — `beam/` wizards**: move the beam-domain input wizards
-   (`Beam_Classification`, `Beam_Length`, `Beam_Supports`,
-   `define_continuous_supports`, `define_custom_supports`, `manage_loads`,
-   `define_stepped_segments`) out of `inputs.py` into `ui/beam/`. After that:
-   checkpoint-4 `reports/` renderers, checkpoint-5 thin out `cli.py` to a pure
-   orchestrator.
+2. **P0, P1, P2, and P3-checkpoints 1–3 are fully done.** The
+   `cli ↔ inputs` circular-import cycle is permanently eliminated and
+   `ui/inputs.py` no longer exists (wizards now in `ui/beam/`). Next is
+   **P3-checkpoint-4 — `reports/` renderers**: move the domain report
+   renderers (`display_analysis_results`, `display_analysis_info`,
+   `display_deflection_analysis`, `display_stress_analysis`,
+   `display_engineering_recommendations`) out of `Menus.py` into
+   `ui/reports/`. After that: checkpoint-5 — fold the navigation menus into
+   `ui/menus/` and thin out `cli.py` to a pure orchestrator.
    Then **P4** (`ProjectRepository`, `LiveClock`, logging) and **P5**
    (solver registry, plugin contract, settings/config split — needed before
    frame2d/truss2d or a GUI).
@@ -667,7 +717,9 @@ class UserSettings:
    approval since it changes the launch contract.
 3. **Key constraint unchanged**: `cli.py` cannot be runtime-imported in the
    sandbox (transitive `indeterminatebeam`). Verify its changes via AST.
-   `Menus.py`, `inputs.py`, `ui/console/*`, and the plotting modules ARE
-   runtime-testable. Regression suite is `test_stepped_solver.py` (run
-   directly with `PYTHONPATH=src python test_stepped_solver.py` — 8/8; pytest
-   is not installed in the sandbox Python).
+   `Menus.py`, `ui/beam/*`, `ui/console/*`, and the plotting modules ARE
+   runtime-testable (pyvista absent — its import stays try/except-guarded
+   in cli.py). Regression suite is `test_stepped_solver.py` (run directly
+   with `PYTHONPATH=src py -3 test_stepped_solver.py` — 8/8; `python` is
+   not on PATH in this shell, use the `py -3` launcher; pytest is not
+   installed in the sandbox Python).
