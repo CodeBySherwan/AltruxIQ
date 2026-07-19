@@ -12,6 +12,10 @@
 > exists** — its 8 wizards now live in `ui/beam/`, and the
 > **`cli ↔ inputs` circular-import cycle is permanently eliminated** (zero
 > `from ui.cli import` statements remain in `src/`).
+> **P6 — unified stage-driven Stepped Bar APPROVED** (2026-07-19, see §P6):
+> the `define_stepped_segments` monolith retires; Stepped Bar flows through
+> the same main-menu stages as every other beam type. Queued after
+> P3-checkpoint-5, before P4.
 > Ready for **P3-checkpoint-4** (`reports/` renderers).
 > **Date**: 2026-07-19.
 
@@ -455,6 +459,79 @@ somewhere else to live.
 
 ---
 
+### P6 — Unified stage-driven Stepped Bar (APPROVED 2026-07-19)
+
+> **Sequencing**: runs **after P3-checkpoint-5, before P4**. Numbered P6
+> because it was identified after P4/P5 were drafted; execution order is
+> P3 → P6 → P4 → P5. Approved by the user in conversation: "make the stepped
+> bar work like any other beam type but taking into account segments number."
+
+**Problem (3 classes, user-reported & confirmed)**:
+1. *Silent conflicts* — with segments defined, main-menu `[4] Material
+   Selection` still writes `state.elastic_modulus` / `material_saved`, which
+   the stepped solver ignores (segments carry their own `E`). The user
+   believes the material changed; it didn't. Same bug family as P0-2.
+2. *Dead/misleading menu items* — for Stepped Bar, "Enter Beam Length" and
+   "Select Material" do nothing meaningful; `state.beam_length` / `state.Ix` /
+   `state.shape` stay empty, forcing `!= "Stepped Bar"` guards across
+   display/save/solve code.
+3. *All-or-nothing editing* — changing one segment's material/section means
+   re-running the entire `define_stepped_segments()` monolith.
+
+**Goal**: one stage-driven flow for ALL beam types. Stepped Bar makes some
+stages multi-valued instead of bypassing them. The `define_stepped_segments`
+monolith retires; `ui/beam/stepped.py` shrinks to per-stage helpers +
+assembly/validation.
+
+**Stage behavior for Stepped Bar** (standard beams unchanged):
+- `[2] Classification`: unchanged (returns "Stepped Bar"; no segment count
+  here — count is geometry, lives in Profile).
+- `[3] Profile`: "Define Segments" — segment count X + lengths (default:
+  equal split of a total length; option: custom per-segment, enforced
+  contiguous from 0). Then "Define Cross-Sections" — loops X times through
+  the EXISTING profile flow (`choose_profile` → custom dims / standard
+  library / saved sections) with "same as previous segment" and "apply to
+  all remaining" shortcuts.
+- `[4] Material`: shows the per-segment material list; prominent default
+  "apply one material to all segments" (the common case — stepped bars
+  usually vary section, not material) plus "edit material for segment i".
+  Reuses `ui/materials/selector.select_material` per segment — zero changes
+  there.
+- `[5] Boundary` / `[6] Loads`: already shared (`define_custom_supports`,
+  `manage_loads` — the latter already stepped-aware for axial/angled
+  loads). No changes.
+- `[8] Solve`: NEW pre-solve validation — lengths contiguous from 0, X
+  sections defined, X materials assigned; failures name the incomplete
+  stage. Then existing dispatch to `solve_stepped_beam()`, unchanged.
+
+**State changes**:
+- `state.segments` schema UNCHANGED (§5.6 save format untouched;
+  `test_stepped_solver.py` unaffected — it tests the solver, not wizards).
+- `state.beam_length = Σ segment lengths` ALWAYS populated, including
+  Stepped Bar (kills a class of `!= "Stepped Bar"` guards in
+  schematic/reports/save).
+- Segments are ASSEMBLED from stage data (lengths + sections + materials)
+  by one `assemble_segments(...)` function; `project_state` flags
+  (`profile_saved`, `material_saved`) become uniform across beam types.
+- Menu labels become beam-type-aware in the Profile/Material slots (same
+  pattern as the existing dynamic `fea_3d_choice` computation) — no
+  separate menu trees.
+
+**Migration**: `load_project` back-fills stage data (per-segment
+sections/materials, `beam_length`) from saved `segments` for old Stepped
+Bar projects so they stay editable in the new flow.
+
+**Out of scope**: solver changes (none needed); postprocessing items
+9/10/11 (legitimate domain difference — stays); PyVista stepped meshes
+(still §4.13's open enhancement).
+
+**Verification**: `ast.parse`; runtime wizard-flow tests with scripted
+stdin (the wizards are runtime-testable — feed `input()`); validation +
+assembly unit tests (assembled segments match the old monolith's output
+shape); stale-reference grep; stepped-solver regression 8/8.
+
+---
+
 ### P4 — Reusable common modules
 
 #### P4-1 — Save/load: Repository pattern
@@ -710,7 +787,9 @@ class UserSettings:
    `display_engineering_recommendations`) out of `Menus.py` into
    `ui/reports/`. After that: checkpoint-5 — fold the navigation menus into
    `ui/menus/` and thin out `cli.py` to a pure orchestrator.
-   Then **P4** (`ProjectRepository`, `LiveClock`, logging) and **P5**
+   Then **P6** (unified stage-driven Stepped Bar — APPROVED, see §P6;
+   retires the `define_stepped_segments` monolith), then **P4**
+   (`ProjectRepository`, `LiveClock`, logging) and **P5**
    (solver registry, plugin contract, settings/config split — needed before
    frame2d/truss2d or a GUI).
    Open deferred item: **P1-4** (`run.py` entry point) — needs explicit user
