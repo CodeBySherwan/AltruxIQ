@@ -20,7 +20,14 @@ from ui.beam.geometry import (
     define_custom_supports,
 )
 from ui.beam.loads import manage_loads
-from ui.beam.stepped import define_stepped_segments
+from ui.beam.stepped import (
+    define_stepped_segments,
+    define_segment_lengths,
+    define_segment_section,
+    define_segment_material,
+    assemble_segments,
+    validate_segments_for_solve,
+)
 
 __all__ = [
     "Beam_Classification",
@@ -30,5 +37,11 @@ __all__ = [
     "define_continuous_supports",
     "define_custom_supports",
     "manage_loads",
+    # Stepped Bar — legacy monolith (retired in P6 checkpoint-B) + per-stage helpers
     "define_stepped_segments",
+    "define_segment_lengths",
+    "define_segment_section",
+    "define_segment_material",
+    "assemble_segments",
+    "validate_segments_for_solve",
 ]
