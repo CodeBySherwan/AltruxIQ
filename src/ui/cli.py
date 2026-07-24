@@ -40,7 +40,6 @@ from database.sections_database import SectionsDatabase
 from database.materials_database import MaterialDatabase  # Import MaterialDatabase class
 from solver.indeterminate_solver import solve_beam
 from solver.stepped_solver import solve_stepped_beam
-from solver.area_solver import area_from_section
 from solver import moi_solver
 from plotting.main_plotting import (Matplot_Deflection, Plotly_Deflection, Plotly_sfd_bmd, Matplot_sfd_bmd, format_loads_for_plotting, Plotly_ShearStress,Matplot_ShearStress,
                       Matplot_BendingStress,Plotly_BendingStress,Plotly_combined_diagrams,Matplot_combined,
@@ -69,15 +68,14 @@ from solver.stress_solver import (first_moment_of_area_general,
 from ui.console import (print_success, print_error, print_option, print_title, clear_screen,
                         ui_banner, ui_open, ui_close, ui_blank, ui_bullet, ui_footer,
                         fmt_datetime, fmt_date_compact)
-from ui.Menus import (main_menu_template, project_management_menu, profile_definition_menu,
-                      choose_profile, display_profile_info,
-                      material_selection_menu, boundary_conditions_menu,
+from ui.menus import (main_menu_template, project_management_menu, profile_definition_menu,
+                      choose_profile, material_selection_menu, boundary_conditions_menu,
                       loads_definition_menu, analysis_simulation_menu,
                       postprocessing_menu, pyvista_menu, unit_system_menu,
                       resolution_menu, profile_source_menu, display_section_library)
 from ui.reports import (display_analysis_info, display_analysis_results,
                         display_deflection_analysis, display_stress_analysis,
-                        display_engineering_recommendations)
+                        display_engineering_recommendations, display_profile_info)
 from ui.materials.selector import (load_material_database, select_material,
                                    display_material_info, define_custom_material)
 from ui.beam import (Beam_Length, Beam_Supports, manage_loads, Beam_Classification,

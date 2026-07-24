@@ -2,7 +2,7 @@
 
 Interactive wizard for defining stepped beam segments, each with its own
 cross-section (custom dimensions, standard library, or saved sections),
-material and length. Heavy dependencies (``solver``, ``ui.Menus``,
+material and length. Heavy dependencies (``solver``, ``ui.menus``,
 ``database``) are imported function-locally so that importing this module
 stays cheap and free of solver-layer side effects.
 
@@ -51,7 +51,7 @@ def define_stepped_segments(unit_system="Metric", units=None):
     # No sys.path surgery needed — common.paths.ensure_src_in_path handles that.
     from solver import moi_solver
     from solver.area_solver import area_from_section
-    from ui.Menus import choose_profile, display_section_library
+    from ui.menus import choose_profile, display_section_library
     # Kit helpers (print_*/clear_screen) come from the module top.
 
     segments = []
